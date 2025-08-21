@@ -156,6 +156,16 @@ def generate_dot(args):
     account_info = discovery.get_account_info()
     output_path = args.output or "aws_infrastructure"
     
+    # Prepare security group options
+    sg_options = {
+        "flows": args.sg_flows,
+        "direction": args.sg_direction,
+        "detail": args.sg_detail,
+        "filter_internal": args.sg_filter_internal,
+        "filter_ephemeral": args.sg_filter_ephemeral,
+        "only_ingress": args.sg_only_ingress
+    }
+    
     result = generator.generate_diagram(
         account_info=account_info,
         vpcs=resources.get("vpcs", []),
@@ -166,7 +176,8 @@ def generate_dot(args):
         security_groups=resources.get("security_groups", {}),
         route53_zones=resources.get("route53_zones", []),
         region=args.region,
-        output_path=output_path
+        output_path=output_path,
+        sg_options=sg_options
     )
     
     if result:
@@ -192,6 +203,23 @@ def main():
     parser.add_argument("--include-route53", action="store_true", default=True, help="Include Route53 zones")
     parser.add_argument("--include-acm", action="store_true", default=True, help="Include ACM certificates")
     
+    # Security Group behavior flags
+    sg_group = parser.add_argument_group("Security Group Options", "Control how security group connections are displayed")
+    sg_group.add_argument("--sg-flows", choices=["none", "inter-subnet", "tier-crossing", "external-only"], 
+                         default="inter-subnet", help="Types of connections to show (default: inter-subnet)")
+    sg_group.add_argument("--sg-direction", choices=["both", "north-south", "east-west"], 
+                         default="both", help="Traffic direction filter (default: both)")
+    sg_group.add_argument("--sg-detail", choices=["minimal", "ports", "protocols", "full"], 
+                         default="ports", help="Connection label detail level (default: ports)")
+    sg_group.add_argument("--sg-filter-internal", action="store_true", 
+                         help="Hide same-subnet internal connections")
+    sg_group.add_argument("--sg-filter-ephemeral", action="store_true", 
+                         help="Hide high ephemeral ports (>32768)")
+    sg_group.add_argument("--sg-only-ingress", action="store_true", 
+                         help="Only show ingress rules (ignore egress)")
+    sg_group.add_argument("--sg-preset", choices=["clean", "network", "security", "debug"], 
+                         help="Predefined security group display presets")
+    
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
     
     # Discover command
@@ -207,6 +235,10 @@ def main():
     
     args = parser.parse_args()
     
+    # Apply security group presets
+    if args.sg_preset:
+        apply_sg_preset(args)
+    
     if not args.command:
         parser.print_help()
         sys.exit(1)
@@ -221,6 +253,25 @@ def main():
     except Exception as e:
         print(f"Error: {e}")
         sys.exit(1)
+
+
+def apply_sg_preset(args):
+    """Apply predefined security group presets."""
+    if args.sg_preset == "clean":
+        args.sg_flows = "none"
+        args.sg_detail = "minimal"
+    elif args.sg_preset == "network":
+        args.sg_flows = "tier-crossing"
+        args.sg_direction = "north-south"
+        args.sg_detail = "ports"
+    elif args.sg_preset == "security":
+        args.sg_flows = "inter-subnet"
+        args.sg_detail = "full"
+        args.sg_only_ingress = True
+    elif args.sg_preset == "debug":
+        args.sg_flows = "external-only"
+        args.sg_detail = "full"
+        args.sg_filter_ephemeral = True
 
 
 if __name__ == "__main__":

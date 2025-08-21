@@ -130,12 +130,156 @@ uv run python -m aws_diagram_mcp
 
 ## Configuration
 
+### Security Group Behavior Options
+
+The CLI provides extensive customization options for how security group connections are displayed in diagrams:
+
+#### Connection Flow Types (`--sg-flows`)
+Control which types of connections are shown:
+- `none`: Hide all security group connections (clean architecture view)
+- `inter-subnet`: Show connections between different subnets only (default)
+- `tier-crossing`: Show connections between different network tiers only
+- `external-only`: Show only connections involving external/load-balanced traffic
+
+#### Traffic Direction Filtering (`--sg-direction`)
+Filter connections by traffic pattern:
+- `both`: Show all traffic directions (default)
+- `north-south`: Show only up/down stack traffic (web→app→db)
+- `east-west`: Show only lateral traffic between same-tier resources
+
+#### Label Detail Levels (`--sg-detail`)
+Control connection label verbosity:
+- `minimal`: Simple arrows with no labels
+- `ports`: Show port numbers only (default)
+- `protocols`: Show service names and protocols (http/tcp, mysql/tcp)
+- `full`: Show complete port/protocol with security group context
+
+#### Advanced Filters
+- `--sg-filter-internal`: Hide same-subnet internal connections
+- `--sg-filter-ephemeral`: Hide high ephemeral ports (>32768)
+- `--sg-only-ingress`: Show only ingress rules (ignore egress)
+
+#### Presets
+Quick configuration presets for common use cases:
+- `--sg-preset clean`: No security group lines (architecture focus)
+- `--sg-preset network`: Cross-tier flows only (network design)
+- `--sg-preset security`: Full security audit view
+- `--sg-preset debug`: External traffic troubleshooting
+
+#### Examples
+
+```bash
+# Clean architecture diagram with no security group clutter
+./cli.py --sg-preset clean dot
+
+# Show only important cross-tier traffic flows
+./cli.py --sg-flows tier-crossing --sg-direction north-south --sg-detail protocols dot
+
+# Security audit view with all connection details
+./cli.py --sg-preset security --sg-detail full dot
+
+# Troubleshoot external connectivity issues
+./cli.py --sg-flows external-only --sg-filter-ephemeral --sg-detail full dot
+
+# Network design review focusing on tier interactions
+./cli.py --sg-preset network dot --output network-design.png
+```
+
+### Future Configuration Options
+
+The configuration system is designed to support additional customization options for other AWS resources:
+
+- **Instance Grouping**: Cluster instances by tags, auto-scaling groups, or custom criteria
+- **Load Balancer Detail**: Control target group visibility and health status display
+- **RDS Clustering**: Group database instances by clusters or parameter groups
+- **Resource Filtering**: Include/exclude resources by tags, names, or patterns
+- **Visual Styling**: Custom colors, shapes, and layouts for different resource types
+- **Output Formats**: Additional export formats and rendering options
+
+### Configuration Files
+
+Future versions will support configuration files for persistent settings:
+
+```yaml
+# .aws-diagram-config.yaml
+security_groups:
+  default_flows: "tier-crossing"
+  default_detail: "protocols"
+  filter_ephemeral: true
+  
+instances:
+  group_by: ["environment", "tier"]
+  show_private_ips: true
+  
+load_balancers:
+  show_target_health: true
+  group_targets: false
+
+output:
+  default_format: "svg"
+  include_metadata: true
+```
+
 For detailed configuration instructions, see:
 - **[CONFIGURATION.md](CONFIGURATION.md)** - Complete setup guide
 - **[USAGE.md](USAGE.md)** - Usage examples and workflows  
 - **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Common issues and solutions
 
 ## Usage
+
+### Standalone CLI
+
+The project includes a standalone CLI tool for generating diagrams without MCP:
+
+```bash
+# Generate diagrams using the CLI
+./cli.py [OPTIONS] COMMAND
+
+# Available commands:
+./cli.py discover    # Discover AWS resources and output JSON
+./cli.py mermaid     # Generate Mermaid diagram
+./cli.py dot         # Generate DOT/Graphviz diagram
+
+# Global options:
+--region REGION           # AWS region (uses AWS_DEFAULT_REGION env var)
+--profile PROFILE         # AWS profile to use
+--vpc-id VPC_ID          # Specific VPC to diagram
+--output PATH            # Output file path
+--include-route53        # Include Route53 zones (default: true)
+--include-acm            # Include ACM certificates (default: true)
+
+# Security group options (see Configuration section above)
+--sg-flows {none,inter-subnet,tier-crossing,external-only}
+--sg-direction {both,north-south,east-west}
+--sg-detail {minimal,ports,protocols,full}
+--sg-filter-internal
+--sg-filter-ephemeral
+--sg-only-ingress
+--sg-preset {clean,network,security,debug}
+```
+
+#### CLI Examples
+
+```bash
+# Discover all resources in us-west-2 and save to JSON
+./cli.py --region us-west-2 --output resources.json discover
+
+# Generate clean architecture diagram
+./cli.py --sg-preset clean dot --output architecture.png
+
+# Generate Mermaid diagram for specific VPC
+./cli.py --vpc-id vpc-12345678 --output vpc-diagram.md mermaid
+
+# Generate detailed security audit diagram
+./cli.py --sg-preset security --sg-detail full dot --format svg
+
+# Generate network design diagram focusing on cross-tier traffic
+./cli.py --sg-flows tier-crossing --sg-direction north-south dot --output network-design
+```
+
+### MCP Server Usage
+
+When using with Claude via MCP, you can use the following tools:
 
 ### Generate Mermaid Diagram
 
@@ -464,12 +608,24 @@ For issues and questions:
 
 ## Roadmap
 
+### Completed Features
 - [x] Support for DOT/Graphviz output with AWS icons
 - [x] Professional diagram formatting with proper clustering
-- [ ] Support for additional AWS services (Lambda, API Gateway, CloudFront)
-- [ ] Interactive diagram filtering and customization
-- [ ] Export to other diagram formats (draw.io, PlantUML)
-- [ ] Cost analysis integration
-- [ ] Multi-region diagram generation
-- [ ] Real-time diagram updates
-- [ ] Custom styling and themes for both Mermaid and DOT outputs
+- [x] **Advanced Security Group Configuration**: Comprehensive filtering and display options
+- [x] **Standalone CLI Tool**: Independent operation without MCP requirements
+- [x] **Smart Connection Filtering**: Traffic flow analysis and behavioral filtering
+- [x] **Preset Configurations**: Quick setup for common use cases
+
+### Planned Features
+- [ ] **Additional AWS Services**: Lambda, API Gateway, CloudFront, ECS, EKS
+- [ ] **Enhanced Resource Grouping**: Tag-based clustering and auto-scaling group visualization
+- [ ] **Configuration Files**: YAML/JSON-based persistent configuration
+- [ ] **Load Balancer Enhancements**: Target health status and detailed target group visualization
+- [ ] **RDS Clustering**: Cluster grouping and parameter group relationships
+- [ ] **Resource Filtering**: Include/exclude by tags, names, or patterns
+- [ ] **Visual Styling**: Custom colors, shapes, and layouts
+- [ ] **Export Formats**: draw.io, PlantUML, Visio compatibility
+- [ ] **Cost Analysis Integration**: Resource cost annotations
+- [ ] **Multi-region Diagram Generation**: Cross-region connectivity visualization
+- [ ] **Real-time Updates**: Dynamic diagram refresh capabilities
+- [ ] **Interactive Filtering**: Web-based diagram manipulation

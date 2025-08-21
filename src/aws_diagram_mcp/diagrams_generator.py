@@ -12,7 +12,6 @@ from diagrams.aws.database import RDS
 from diagrams.aws.network import ELB, ALB, NLB, Route53
 from diagrams.aws.security import ACM
 from diagrams.aws.general import General
-import shutil
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +34,8 @@ class DiagramsGenerator:
         security_groups: Dict[str, Any],
         route53_zones: List[Dict[str, Any]],
         region: str = "us-east-1",
-        output_path: str = "aws_infrastructure"
+        output_path: str = "aws_infrastructure",
+        sg_options: Optional[Dict[str, Any]] = None
     ) -> str:
         """Generate a complete DOT diagram using Python Diagrams."""
         self.nodes = {}
@@ -48,13 +48,12 @@ class DiagramsGenerator:
         output_dir = Path(output_path).parent
         output_name = Path(output_path).stem
         
-        # Generate the diagram with a temporary name to preserve the .dot file
-        temp_output_path = output_dir / f"{output_name}_temp"
-        final_dot_path = output_dir / f"{output_name}.dot"
+        # Generate the diagram directly to final location
+        final_output_path = output_dir / output_name
         
         with Diagram(
             diagram_title,
-            filename=str(temp_output_path),
+            filename=str(final_output_path),
             show=False,
             direction="TB",
             graph_attr={
@@ -62,7 +61,8 @@ class DiagramsGenerator:
                 "nodesep": "1.0",
                 "ranksep": "1.5",
                 "bgcolor": "white"
-            }
+            },
+            outformat=["dot", "png", "svg"]
         ) as diagram:
             
             # Create Route53 nodes first (they go at the top)
@@ -76,38 +76,20 @@ class DiagramsGenerator:
             
             # Create connections after all nodes are created
             self._create_connections(
-                instances, load_balancers, rds_instances, security_groups, route53_zones
+                instances, load_balancers, rds_instances, security_groups, route53_zones, 
+                subnets, sg_options or {}
             )
         
-        # Copy the temporary dot file to preserve it
-        temp_dot_path = temp_output_path.with_suffix('.dot')
-        if temp_dot_path.exists():
-            shutil.copy2(temp_dot_path, final_dot_path)
-        
-        # Move/rename the generated image files
-        temp_png_path = temp_output_path.with_suffix('.png')
-        temp_svg_path = temp_output_path.with_suffix('.svg')
-        
-        final_png_path = output_dir / f"{output_name}.png"
-        final_svg_path = output_dir / f"{output_name}.svg"
-        
-        if temp_png_path.exists():
-            shutil.move(temp_png_path, final_png_path)
-        if temp_svg_path.exists():
-            shutil.move(temp_svg_path, final_svg_path)
-        
-        # Clean up temporary dot file
-        if temp_dot_path.exists():
-            temp_dot_path.unlink()
-        
-        # Return the path to the generated files
-        dot_path = str(final_dot_path)
-        png_path = str(final_png_path)
+        # The outformat parameter generates all files automatically
+        # Check which files were actually created
+        dot_path = final_output_path.with_suffix('.dot')
+        png_path = final_output_path.with_suffix('.png')
+        svg_path = final_output_path.with_suffix('.svg')
         
         return {
-            "dot_file": dot_path if final_dot_path.exists() else None,
-            "png_file": png_path if final_png_path.exists() else None,
-            "svg_file": str(final_svg_path) if final_svg_path.exists() else None
+            "dot_file": str(dot_path) if dot_path.exists() else None,
+            "png_file": str(png_path) if png_path.exists() else None,
+            "svg_file": str(svg_path) if svg_path.exists() else None
         }
     
     def _create_route53_nodes(self, route53_zones: List[Dict[str, Any]]) -> List[Any]:
@@ -225,7 +207,9 @@ class DiagramsGenerator:
         load_balancers: List[Dict[str, Any]],
         rds_instances: List[Dict[str, Any]],
         security_groups: Dict[str, Any],
-        route53_zones: List[Dict[str, Any]]
+        route53_zones: List[Dict[str, Any]],
+        subnets: List[Dict[str, Any]],
+        sg_options: Dict[str, Any]
     ) -> None:
         """Create all connections between nodes."""
         
@@ -263,9 +247,9 @@ class DiagramsGenerator:
                             style="bold"
                         ) >> target_node
         
-        # Security Group based connections (filter out intra-subnet traffic)
+        # Security Group based connections with smart filtering
         sg_connections = self._analyze_security_group_connections(
-            instances, rds_instances, security_groups
+            instances, rds_instances, security_groups, subnets, sg_options
         )
         
         for conn in sg_connections:
@@ -320,80 +304,253 @@ class DiagramsGenerator:
         self,
         instances: List[Dict[str, Any]],
         rds_instances: List[Dict[str, Any]],
-        security_groups: Dict[str, Any]
+        security_groups: Dict[str, Any],
+        subnets: List[Dict[str, Any]],
+        sg_options: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
-        """Analyze security group rules to determine inter-subnet connections only."""
+        """Analyze security group rules with smart behavioral filtering."""
         connections = []
         
-        # Create instance ID to subnet mapping
-        instance_subnet_map = {}
-        for instance in instances:
-            instance_subnet_map[instance["instance_id"]] = instance.get("subnet_id")
+        # Early exit if flows are set to none
+        flows = sg_options.get("flows", "inter-subnet")
+        if flows == "none":
+            return connections
         
-        # Create RDS ID to subnet mapping (RDS typically spans multiple subnets)
-        rds_subnet_map = {}
-        for rds in rds_instances:
-            # RDS instances don't have a single subnet, so we'll always allow connections to them
-            rds_subnet_map[rds["db_instance_id"]] = None
+        # Get filtering options
+        direction_filter = sg_options.get("direction", "both")
+        detail_level = sg_options.get("detail", "ports")
+        filter_internal = sg_options.get("filter_internal", False)
+        only_ingress = sg_options.get("only_ingress", False)
         
-        # Map security groups to instances
+        # Create mappings
+        instance_map = {inst["instance_id"]: inst for inst in instances}
+        
+        # Map security groups to resources
         instance_sg_map = {}
+        rds_sg_map = {}
+        
         for instance in instances:
             for sg_id in instance.get("security_groups", []):
                 if sg_id not in instance_sg_map:
                     instance_sg_map[sg_id] = []
                 instance_sg_map[sg_id].append(instance["instance_id"])
         
-        # Map security groups to RDS instances
-        rds_sg_map = {}
         for rds in rds_instances:
             for sg_id in rds.get("security_groups", []):
                 if sg_id not in rds_sg_map:
                     rds_sg_map[sg_id] = []
                 rds_sg_map[sg_id].append(rds["db_instance_id"])
         
-        # Analyze ingress rules
+        # Process rules (ingress only if specified)
+        rule_types = ["ingress"] if only_ingress else ["ingress", "egress"]
+        
         for sg_id, sg_info in security_groups.items():
-            for rule in sg_info.get("rules", {}).get("ingress", []):
-                for source in rule.get("sources", []):
-                    if source["type"] == "security_group":
-                        source_sg = source["value"]
-                        
-                        from_instances = instance_sg_map.get(source_sg, [])
-                        to_instances = instance_sg_map.get(sg_id, [])
-                        to_rds = rds_sg_map.get(sg_id, [])
-                        
-                        port = rule.get("to_port", rule.get("from_port", ""))
-                        protocol = self._normalize_protocol(rule.get("protocol", "tcp"))
-                        label = f"{port}/{protocol}" if port else protocol
-                        
-                        # Instance to instance connections (only inter-subnet)
-                        for from_id in from_instances:
-                            from_subnet = instance_subnet_map.get(from_id)
+            for rule_type in rule_types:
+                for rule in sg_info.get("rules", {}).get(rule_type, []):
+                    # Apply port filtering
+                    if not self._filter_by_port_rules(rule, sg_options):
+                        continue
+                    
+                    for source in rule.get("sources", []):
+                        if source["type"] == "security_group":
+                            source_sg = source["value"]
                             
-                            for to_id in to_instances:
-                                to_subnet = instance_subnet_map.get(to_id)
+                            from_instances = instance_sg_map.get(source_sg, [])
+                            to_instances = instance_sg_map.get(sg_id, [])
+                            to_rds = rds_sg_map.get(sg_id, [])
+                            
+                            # Generate label
+                            label = self._generate_connection_label(rule, detail_level)
+                            
+                            # Process instance-to-instance connections
+                            for from_id in from_instances:
+                                from_instance = instance_map.get(from_id)
+                                if not from_instance:
+                                    continue
                                 
-                                # Only show connections between different subnets or when subnet is unknown
-                                if (from_id != to_id and 
-                                    (from_subnet != to_subnet or not from_subnet or not to_subnet)):
+                                for to_id in to_instances:
+                                    if from_id == to_id:
+                                        continue
+                                    
+                                    to_instance = instance_map.get(to_id)
+                                    if not to_instance:
+                                        continue
+                                    
+                                    # Apply flow filtering
+                                    flow_type = self._classify_connection_flow(
+                                        from_instance, to_instance, subnets, []
+                                    )
+                                    
+                                    if not self._should_show_flow(flow_type, flows, filter_internal):
+                                        continue
+                                    
+                                    # Apply direction filtering
+                                    traffic_direction = self._get_traffic_direction(
+                                        from_instance, to_instance, subnets
+                                    )
+                                    
+                                    if not self._should_show_direction(traffic_direction, direction_filter):
+                                        continue
+                                    
                                     connections.append({
                                         "from": from_id,
                                         "to": to_id,
                                         "label": label,
-                                        "type": "instance"
+                                        "type": "instance",
+                                        "flow_type": flow_type,
+                                        "direction": traffic_direction
                                     })
-                            
-                            # Instance to database connections (always show - databases span subnets)
-                            for to_id in to_rds:
-                                connections.append({
-                                    "from": from_id,
-                                    "to": to_id,
-                                    "label": label,
-                                    "type": "database"
-                                })
+                                
+                                # Process instance-to-database connections (always show unless flows=none)
+                                for to_id in to_rds:
+                                    connections.append({
+                                        "from": from_id,
+                                        "to": to_id,
+                                        "label": label,
+                                        "type": "database",
+                                        "flow_type": "database",
+                                        "direction": "north-south"
+                                    })
         
         return connections
+    
+    def _should_show_flow(self, flow_type: str, flows_filter: str, filter_internal: bool) -> bool:
+        """Determine if a flow should be shown based on flow type filters."""
+        if filter_internal and flow_type == "intra-subnet":
+            return False
+        
+        if flows_filter == "inter-subnet":
+            return flow_type in ["inter-subnet", "tier-crossing"]
+        elif flows_filter == "tier-crossing":
+            return flow_type == "tier-crossing"
+        elif flows_filter == "external-only":
+            return flow_type == "external-only"
+        
+        return True
+    
+    def _should_show_direction(self, traffic_direction: str, direction_filter: str) -> bool:
+        """Determine if a connection should be shown based on direction filter."""
+        if direction_filter == "both":
+            return True
+        elif direction_filter == "north-south":
+            return traffic_direction == "north-south"
+        elif direction_filter == "east-west":
+            return traffic_direction == "east-west"
+        
+        return True
+    
+    def _classify_connection_flow(
+        self,
+        from_instance: Dict[str, Any],
+        to_instance: Dict[str, Any],
+        subnets: List[Dict[str, Any]],
+        load_balancers: List[Dict[str, Any]]
+    ) -> str:
+        """Classify the type of connection flow."""
+        from_subnet_id = from_instance.get("subnet_id")
+        to_subnet_id = to_instance.get("subnet_id")
+        
+        # Find subnet tiers
+        from_tier = None
+        to_tier = None
+        for subnet in subnets:
+            if subnet["subnet_id"] == from_subnet_id:
+                from_tier = subnet.get("tier", "unknown")
+            elif subnet["subnet_id"] == to_subnet_id:
+                to_tier = subnet.get("tier", "unknown")
+        
+        # Check if either instance is behind a load balancer (external traffic)
+        for lb in load_balancers:
+            for tg in lb.get("target_groups", []):
+                for target in tg.get("targets", []):
+                    if target["id"] in [from_instance.get("instance_id"), to_instance.get("instance_id")]:
+                        return "external-only"
+        
+        # Determine flow type
+        if from_subnet_id == to_subnet_id:
+            return "intra-subnet"
+        elif from_tier != to_tier and from_tier and to_tier:
+            return "tier-crossing"
+        else:
+            return "inter-subnet"
+    
+    def _get_traffic_direction(
+        self,
+        from_instance: Dict[str, Any],
+        to_instance: Dict[str, Any],
+        subnets: List[Dict[str, Any]]
+    ) -> str:
+        """Determine traffic direction (north-south vs east-west)."""
+        from_subnet_id = from_instance.get("subnet_id")
+        to_subnet_id = to_instance.get("subnet_id")
+        
+        # Find subnet tiers
+        from_tier = None
+        to_tier = None
+        for subnet in subnets:
+            if subnet["subnet_id"] == from_subnet_id:
+                from_tier = subnet.get("tier", "unknown")
+            elif subnet["subnet_id"] == to_subnet_id:
+                to_tier = subnet.get("tier", "unknown")
+        
+        # Define tier hierarchy: presentation -> application -> restricted
+        tier_hierarchy = {"presentation": 1, "application": 2, "restricted": 3}
+        
+        if from_tier and to_tier and from_tier in tier_hierarchy and to_tier in tier_hierarchy:
+            from_level = tier_hierarchy[from_tier]
+            to_level = tier_hierarchy[to_tier]
+            
+            if from_level != to_level:
+                return "north-south"  # Up or down the stack
+            else:
+                return "east-west"    # Same tier, lateral traffic
+        
+        return "both"  # Unknown or mixed
+    
+    def _filter_by_port_rules(self, rule: Dict[str, Any], sg_options: Dict[str, Any]) -> bool:
+        """Filter connections based on port and protocol rules."""
+        if sg_options.get("filter_ephemeral", False):
+            from_port = rule.get("from_port")
+            to_port = rule.get("to_port")
+            
+            # Filter out high ephemeral ports
+            if from_port and from_port > 32768:
+                return False
+            if to_port and to_port > 32768:
+                return False
+        
+        return True
+    
+    def _generate_connection_label(
+        self,
+        rule: Dict[str, Any],
+        detail_level: str
+    ) -> str:
+        """Generate connection labels based on detail level."""
+        if detail_level == "minimal":
+            return ""
+        
+        port = rule.get("to_port", rule.get("from_port", ""))
+        protocol = self._normalize_protocol(rule.get("protocol", "tcp"))
+        
+        if detail_level == "ports":
+            return str(port) if port else protocol
+        elif detail_level == "protocols":
+            if port:
+                # Add common service names
+                service_names = {
+                    80: "http", 443: "https", 22: "ssh", 3306: "mysql",
+                    5432: "postgres", 6379: "redis", 27017: "mongodb"
+                }
+                service = service_names.get(port, f"{port}")
+                return f"{service}/{protocol}"
+            return protocol
+        elif detail_level == "full":
+            label = f"{port}/{protocol}" if port else protocol
+            # Could add source SG info here in future
+            return label
+        
+        return ""
     
     def _normalize_protocol(self, protocol: str) -> str:
         """Normalize protocol string."""
