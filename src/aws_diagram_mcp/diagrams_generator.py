@@ -96,7 +96,7 @@ class DiagramsGenerator:
         route53_nodes = []
         for zone in route53_zones:
             zone_name = zone["name"].rstrip(".")
-            node = Route53(f"Route53 {zone_name}")
+            node = Route53(f"Route53\n{zone_name}")
             self.nodes[zone["zone_id"]] = node
             route53_nodes.append(node)
         return route53_nodes
@@ -114,7 +114,7 @@ class DiagramsGenerator:
         vpc_id = vpc["vpc_id"]
         vpc_name = vpc["tags"].get("Name", vpc_id)
         
-        with Cluster(f"VPC: {vpc_name} ({vpc['cidr_block']})"):
+        with Cluster(f"VPC: {vpc_name}\n({vpc['cidr_block']})"):
             with Cluster(f"Region: {region}"):
                 
                 # Filter resources for this VPC
@@ -155,7 +155,7 @@ class DiagramsGenerator:
             "application": "Application Subnet", 
             "restricted": "Restricted Subnet"
         }
-        label = f"{tier_labels.get(tier, 'Subnet')}: {subnet_name} ({subnet['cidr_block']})"
+        label = f"{tier_labels.get(tier, 'Subnet')}\n{subnet_name}\n({subnet['cidr_block']})"
         
         with Cluster(label):
             
@@ -166,11 +166,11 @@ class DiagramsGenerator:
                 ips = ", ".join(lb.get("ips", [])[:2])  # Limit to first 2 IPs for space
                 
                 if lb_type == "APPLICATION":
-                    node = ALB(f"{lb_name} {ips}" if ips else lb_name)
+                    node = ALB(f"{lb_name}\n{ips}" if ips else lb_name)
                 elif lb_type == "NETWORK":
-                    node = NLB(f"{lb_name} {ips}" if ips else lb_name)
+                    node = NLB(f"{lb_name}\n{ips}" if ips else lb_name)
                 else:
-                    node = ELB(f"{lb_name} {ips}" if ips else lb_name)
+                    node = ELB(f"{lb_name}\n{ips}" if ips else lb_name)
                 
                 self.nodes[lb["arn"]] = node
             
@@ -180,9 +180,9 @@ class DiagramsGenerator:
                 ip = instance.get("private_ip", "no-ip")
                 instance_type = instance.get("instance_type", "")
                 
-                label = f"{name} {ip}"
+                label = f"{name}\n{ip}"
                 if instance_type:
-                    label += f" ({instance_type})"
+                    label += f"\n({instance_type})"
                 
                 node = EC2(label)
                 self.nodes[instance["instance_id"]] = node
@@ -193,9 +193,9 @@ class DiagramsGenerator:
                 engine = rds["engine"]
                 endpoint = rds.get("endpoint", "")
                 
-                label = f"{db_id} {engine}"
+                label = f"{db_id}\n{engine}"
                 if endpoint:
-                    label += f" {endpoint}"
+                    label += f"\n{endpoint}"
                 
                 node = RDS(label)
                 self.nodes[rds["db_instance_id"]] = node
