@@ -12,6 +12,7 @@ from diagrams.aws.database import RDS
 from diagrams.aws.network import ELB, ALB, NLB, Route53
 from diagrams.aws.security import ACM
 from diagrams.aws.general import General
+import shutil
 
 logger = logging.getLogger(__name__)
 
@@ -47,9 +48,13 @@ class DiagramsGenerator:
         output_dir = Path(output_path).parent
         output_name = Path(output_path).stem
         
+        # Generate the diagram with a temporary name to preserve the .dot file
+        temp_output_path = output_dir / f"{output_name}_temp"
+        final_dot_path = output_dir / f"{output_name}.dot"
+        
         with Diagram(
             diagram_title,
-            filename=str(output_dir / output_name),
+            filename=str(temp_output_path),
             show=False,
             direction="TB",
             graph_attr={
@@ -74,14 +79,35 @@ class DiagramsGenerator:
                 instances, load_balancers, rds_instances, security_groups, route53_zones
             )
         
+        # Copy the temporary dot file to preserve it
+        temp_dot_path = temp_output_path.with_suffix('.dot')
+        if temp_dot_path.exists():
+            shutil.copy2(temp_dot_path, final_dot_path)
+        
+        # Move/rename the generated image files
+        temp_png_path = temp_output_path.with_suffix('.png')
+        temp_svg_path = temp_output_path.with_suffix('.svg')
+        
+        final_png_path = output_dir / f"{output_name}.png"
+        final_svg_path = output_dir / f"{output_name}.svg"
+        
+        if temp_png_path.exists():
+            shutil.move(temp_png_path, final_png_path)
+        if temp_svg_path.exists():
+            shutil.move(temp_svg_path, final_svg_path)
+        
+        # Clean up temporary dot file
+        if temp_dot_path.exists():
+            temp_dot_path.unlink()
+        
         # Return the path to the generated files
-        dot_path = str(output_dir / f"{output_name}.dot")
-        png_path = str(output_dir / f"{output_name}.png")
+        dot_path = str(final_dot_path)
+        png_path = str(final_png_path)
         
         return {
-            "dot_file": dot_path,
-            "png_file": png_path if Path(png_path).exists() else None,
-            "svg_file": str(output_dir / f"{output_name}.svg") if Path(str(output_dir / f"{output_name}.svg")).exists() else None
+            "dot_file": dot_path if final_dot_path.exists() else None,
+            "png_file": png_path if final_png_path.exists() else None,
+            "svg_file": str(final_svg_path) if final_svg_path.exists() else None
         }
     
     def _create_route53_nodes(self, route53_zones: List[Dict[str, Any]]) -> List[Any]:
