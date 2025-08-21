@@ -451,7 +451,7 @@ async def generate_aws_diagram_dot(args: GenerateDiagramDotArgs) -> Dict[str, An
 
 def serve():
     """Run the MCP server."""
-    asyncio.run(mcp.run())
+    mcp.run()
 
 
 if __name__ == "__main__":
