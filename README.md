@@ -1,11 +1,12 @@
-# AWS Infrastructure Diagram MCP Server
+# AWS Infrastructure Diagram CLI
 
-An MCP (Model Context Protocol) server that generates comprehensive AWS infrastructure diagrams in both Mermaid and DOT/Graphviz formats. This tool automatically discovers AWS resources and creates hierarchical diagrams showing VPCs, subnets, EC2 instances, load balancers, RDS instances, and their security group connections.
+A command-line tool that generates comprehensive AWS infrastructure diagrams in both Mermaid and DOT/Graphviz formats. This tool automatically discovers AWS resources and creates hierarchical diagrams showing VPCs, subnets, EC2 instances, load balancers, RDS instances, and their security group connections.
 
 ## Features
 
 - **Comprehensive Resource Discovery**: Automatically discovers VPCs, subnets, EC2 instances, load balancers, RDS instances, security groups, Route53 zones, and ACM certificates
-- **Hierarchical Organization**: Organizes resources by Account > VPC > Region > Subnet tiers
+- **Multi-Region Support**: Discover and visualize resources across multiple AWS regions in a single diagram
+- **Hierarchical Organization**: Organizes resources by Account > Region > VPC > Subnet tiers
 - **Security Group Analysis**: Maps actual connections between resources based on security group rules
 - **Load Balancer Mapping**: Shows real target group connections, not assumptions
 - **Dual Output Formats**: 
@@ -19,7 +20,7 @@ An MCP (Model Context Protocol) server that generates comprehensive AWS infrastr
 
 ```bash
 # Clone or create the project
-cd aws-diagram-mcp
+cd aws-diagram-cli
 
 # Install dependencies
 uv sync
@@ -76,56 +77,14 @@ export AWS_SECRET_ACCESS_KEY=your_secret_key
 export AWS_DEFAULT_REGION=us-east-1
 ```
 
-### 2. Configure MCP Client
-
-Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/claude_desktop_config.json`):
-
-```json
-{
-  "mcpServers": {
-    "aws-diagram": {
-      "command": "uv",
-      "args": ["run", "python", "-m", "aws_diagram_mcp"],
-      "cwd": "/absolute/path/to/aws-diagram-mcp",
-      "env": {
-        "AWS_PROFILE": "your-profile",
-        "AWS_DEFAULT_REGION": "us-east-1"
-      }
-    }
-  }
-}
-```
-
-or for Claude Code (`${PROJECT_DIR}/.mcp.json`):
-
-```json
-{
-  "mcpServers": {
-    "aws-diagram": {
-      "command": "uvx",
-      "args": [
-        "--from",
-        "git+https://github.com/lukeburciu/aws-diagram-mcp",
-        "aws-diagram-mcp"
-      ],
-      "env": {
-        "AWS_PROFILE": "${AWS_PROFILE}",
-        "AWS_DEFAULT_REGION": "${AWS_DEFAULT_REGION}"
-      }
-    }
-  }
-}
-```
-
-### 3. Test the Setup
+### 2. Test the Setup
 
 ```bash
 # Test AWS access
 aws sts get-caller-identity --profile your-profile
 
-# Test server startup
-cd /path/to/aws-diagram-mcp
-uv run python -m aws_diagram_mcp
+# Test CLI tool
+uv run python -m aws_diagram_cli --help
 ```
 
 ## Configuration
@@ -241,7 +200,7 @@ The project includes a standalone CLI tool for generating diagrams without MCP:
 ./cli.py dot         # Generate DOT/Graphviz diagram
 
 # Global options:
---region REGION           # AWS region (uses AWS_DEFAULT_REGION env var)
+--regions REGIONS         # AWS regions to scan (can specify multiple)
 --profile PROFILE         # AWS profile to use
 --vpc-id VPC_ID          # Specific VPC to diagram
 --output PATH            # Output file path
@@ -261,140 +220,74 @@ The project includes a standalone CLI tool for generating diagrams without MCP:
 #### CLI Examples
 
 ```bash
-# Discover all resources in us-west-2 and save to JSON
-./cli.py --region us-west-2 --output resources.json discover
+# Discover all resources in a single region and save to JSON
+uv run python -m aws_diagram_cli --regions us-west-2 --output resources.json discover
 
-# Generate clean architecture diagram
-./cli.py --sg-preset clean dot --output architecture.png
+# Discover resources across multiple regions
+uv run python -m aws_diagram_cli --regions us-east-1 us-west-2 eu-west-1 discover
 
-# Generate Mermaid diagram for specific VPC
-./cli.py --vpc-id vpc-12345678 --output vpc-diagram.md mermaid
+# Generate clean architecture diagram for multiple regions
+uv run python -m aws_diagram_cli --regions us-east-1 us-west-2 --sg-preset clean dot --output architecture.png
+
+# Generate Mermaid diagram for specific VPC across regions
+uv run python -m aws_diagram_cli --regions us-east-1 us-west-2 --vpc-id vpc-12345678 --output vpc-diagram.md mermaid
 
 # Generate detailed security audit diagram
-./cli.py --sg-preset security --sg-detail full dot --format svg
+uv run python -m aws_diagram_cli --sg-preset security --sg-detail full dot --format svg
 
 # Generate network design diagram focusing on cross-tier traffic
-./cli.py --sg-flows tier-crossing --sg-direction north-south dot --output network-design
+uv run python -m aws_diagram_cli --sg-flows tier-crossing --sg-direction north-south dot --output network-design
 ```
 
-### MCP Server Usage
+## CLI Commands
 
-When using with Claude via MCP, you can use the following tools:
+### discover
 
-### Generate Mermaid Diagram
+Discover AWS resources across multiple regions and output as JSON.
 
-```python
-# Generate Mermaid diagram for entire AWS account
-result = generate_aws_diagram({
-    "aws_account": "my-prod-account",
-    "region": "us-east-1",
-    "profile": "production"
-})
+```bash
+# Discover all resources in multiple regions
+uv run python -m aws_diagram_cli --regions us-east-1 us-west-2 discover
+
+# Save discovery results to file
+uv run python -m aws_diagram_cli --regions us-east-1 --output resources.json discover
+
+# Discover resources for specific VPC
+uv run python -m aws_diagram_cli --vpc-id vpc-12345678 discover
 ```
 
-### Generate DOT/Graphviz Diagram
+### mermaid
 
-```python
-# Generate professional DOT diagram with AWS icons
-result = generate_aws_diagram_dot({
-    "aws_account": "my-prod-account",
-    "region": "us-east-1",
-    "profile": "production",
-    "output_format": "png"  # png, svg, pdf, or dot
-})
+Generate Mermaid text-based diagrams for documentation.
+
+```bash
+# Generate Mermaid diagram for multiple regions
+uv run python -m aws_diagram_cli --regions us-east-1 us-west-2 mermaid
+
+# Save Mermaid diagram to file
+uv run python -m aws_diagram_cli --output diagram.md mermaid
+
+# Generate diagram with specific security group settings
+uv run python -m aws_diagram_cli --sg-preset clean mermaid
 ```
 
-### Generate Diagram for Specific VPC
+### dot
 
-```python
-# Generate diagram for specific VPC only (works with both formats)
-result = generate_aws_diagram({
-    "aws_account": "my-account", 
-    "vpc_id": "vpc-12345678",
-    "region": "us-west-2"
-})
+Generate DOT/Graphviz diagrams with AWS icons in multiple formats.
+
+```bash
+# Generate PNG diagram (default)
+uv run python -m aws_diagram_cli --regions us-east-1 us-west-2 dot
+
+# Generate SVG diagram
+uv run python -m aws_diagram_cli dot --format svg
+
+# Generate PDF with custom output path
+uv run python -m aws_diagram_cli --output architecture dot --format pdf
+
+# Generate detailed security audit diagram
+uv run python -m aws_diagram_cli --sg-preset security --sg-detail full dot
 ```
-
-### Discover Resources Only
-
-```python
-# Discover resources without generating diagram
-result = discover_aws_resources({
-    "region": "us-east-1",
-    "resource_types": ["instances", "load_balancers", "rds"]
-})
-```
-
-### Validate Mermaid Syntax
-
-```python
-# Validate diagram syntax
-result = validate_mermaid_syntax(diagram_string)
-```
-
-## Available Tools
-
-### `generate_aws_diagram`
-
-Generates a comprehensive AWS infrastructure diagram in Mermaid format.
-
-**Parameters:**
-- `aws_account` (str): AWS account ID or alias for the diagram
-- `region` (str, default="us-east-1"): AWS region to scan
-- `profile` (str, optional): AWS CLI profile to use
-- `output_path` (str, optional): Path to save the markdown file
-- `vpc_id` (str, optional): Specific VPC ID to diagram
-- `include_route53` (bool, default=True): Include Route53 zones
-- `include_acm` (bool, default=True): Include ACM certificates
-
-**Returns:**
-- `success` (bool): Whether the operation succeeded
-- `output_path` (str): Path where diagram was saved
-- `statistics` (dict): Count of discovered resources
-- `diagram` (str): The generated Mermaid diagram
-
-### `generate_aws_diagram_dot`
-
-Generates a comprehensive AWS infrastructure diagram in DOT/Graphviz format with AWS icons.
-
-**Parameters:**
-- `aws_account` (str): AWS account ID or alias for the diagram
-- `region` (str, default="us-east-1"): AWS region to scan
-- `profile` (str, optional): AWS CLI profile to use
-- `output_path` (str, optional): Path to save diagram files (without extension)
-- `vpc_id` (str, optional): Specific VPC ID to diagram
-- `include_route53` (bool, default=True): Include Route53 zones
-- `include_acm` (bool, default=True): Include ACM certificates
-- `output_format` (str, default="png"): Output format (png, svg, pdf, dot)
-
-**Returns:**
-- `success` (bool): Whether the operation succeeded
-- `output_files` (dict): Paths to generated files (DOT, PNG, SVG)
-- `statistics` (dict): Count of discovered resources
-
-### `discover_aws_resources`
-
-Discovers AWS resources without generating a diagram.
-
-**Parameters:**
-- `region` (str, default="us-east-1"): AWS region to scan
-- `profile` (str, optional): AWS CLI profile to use
-- `resource_types` (list): Types to discover (or ["all"])
-
-**Returns:**
-- `success` (bool): Whether the operation succeeded
-- `resources` (dict): Discovered resources by type
-
-### `validate_mermaid_syntax`
-
-Validates Mermaid diagram syntax.
-
-**Parameters:**
-- `diagram` (str): Mermaid diagram string to validate
-
-**Returns:**
-- `valid` (bool): Whether syntax is valid
-- `error` (str, optional): Error message if invalid
 
 ## Diagram Structure
 
@@ -404,8 +297,8 @@ The generated diagrams follow this structure:
 
 ```
 Account
-├── VPC
-    ├── Region
+├── Region (us-east-1, us-west-2, etc.)
+    ├── VPC
         ├── Presentation Subnet (Public)
         │   ├── Application Load Balancers
         │   └── Network Load Balancers
@@ -612,9 +505,12 @@ For issues and questions:
 - [x] Support for DOT/Graphviz output with AWS icons
 - [x] Professional diagram formatting with proper clustering
 - [x] **Advanced Security Group Configuration**: Comprehensive filtering and display options
-- [x] **Standalone CLI Tool**: Independent operation without MCP requirements
+- [x] **Comprehensive CLI Tool**: Full-featured command-line interface
 - [x] **Smart Connection Filtering**: Traffic flow analysis and behavioral filtering
 - [x] **Preset Configurations**: Quick setup for common use cases
+
+### Completed Features
+- [x] **Multi-Region Support**: Cross-region resource discovery and visualization
 
 ### Planned Features
 - [ ] **Additional AWS Services**: Lambda, API Gateway, CloudFront, ECS, EKS
@@ -626,6 +522,5 @@ For issues and questions:
 - [ ] **Visual Styling**: Custom colors, shapes, and layouts
 - [ ] **Export Formats**: draw.io, PlantUML, Visio compatibility
 - [ ] **Cost Analysis Integration**: Resource cost annotations
-- [ ] **Multi-region Diagram Generation**: Cross-region connectivity visualization
 - [ ] **Real-time Updates**: Dynamic diagram refresh capabilities
 - [ ] **Interactive Filtering**: Web-based diagram manipulation

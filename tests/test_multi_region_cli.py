@@ -6,7 +6,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from unittest.mock import MagicMock, patch
-from src.aws_diagram_mcp.aws_discovery import AWSResourceDiscovery
+from src.aws_diagram_cli.aws_discovery import AWSResourceDiscovery
 
 def test_multi_region_discovery():
     """Test that discovery works with multiple regions."""
