@@ -17,9 +17,10 @@ from src.aws_diagram_mcp.diagrams_generator import DiagramsGenerator
 
 def discover_resources(args):
     """Discover AWS resources and print as JSON."""
-    discovery = AWSResourceDiscovery(region=args.region, profile=args.profile)
+    discovery = AWSResourceDiscovery(regions=args.regions, profile=args.profile)
     
-    print(f"Discovering AWS resources in {args.region}...")
+    regions_str = ", ".join(args.regions)
+    print(f"Discovering AWS resources in {regions_str}...")
     
     # Get account info
     account_info = discovery.get_account_info()
@@ -44,14 +45,20 @@ def discover_resources(args):
     resources["subnets"] = discovery.discover_subnets(vpc_id=args.vpc_id)
     print(f"Found {len(resources['subnets'])} subnets")
     
-    # Get all security groups from instances, load balancers, and RDS
-    all_sg_ids = set()
+    # Get all security groups from instances, load balancers, and RDS, grouped by region
+    sg_ids_by_region = {region: set() for region in args.regions}
     for instance in resources["instances"]:
-        all_sg_ids.update(instance.get("security_groups", []))
+        region = instance.get("region")
+        if region in sg_ids_by_region:
+            sg_ids_by_region[region].update(instance.get("security_groups", []))
     for rds in resources["rds_instances"]:
-        all_sg_ids.update(rds.get("security_groups", []))
+        region = rds.get("region")
+        if region in sg_ids_by_region:
+            sg_ids_by_region[region].update(rds.get("security_groups", []))
     
-    resources["security_groups"] = discovery.discover_security_groups(list(all_sg_ids))
+    # Convert sets to lists
+    sg_ids_by_region = {region: list(sg_ids) for region, sg_ids in sg_ids_by_region.items()}
+    resources["security_groups"] = discovery.discover_security_groups(sg_ids_by_region)
     print(f"Found {len(resources['security_groups'])} security groups")
     
     if args.include_route53:
@@ -73,10 +80,11 @@ def discover_resources(args):
 
 def generate_mermaid(args):
     """Generate Mermaid diagram."""
-    discovery = AWSResourceDiscovery(region=args.region, profile=args.profile)
+    discovery = AWSResourceDiscovery(regions=args.regions, profile=args.profile)
     generator = MermaidDiagramGenerator()
     
-    print(f"Generating Mermaid diagram for {args.region}...")
+    regions_str = ", ".join(args.regions)
+    print(f"Generating Mermaid diagram for {regions_str}...")
     
     # Discover resources
     resources = {
@@ -87,13 +95,20 @@ def generate_mermaid(args):
         "vpcs": discovery.discover_vpcs() if not args.vpc_id else []
     }
     
-    # Get security groups from resources
-    all_sg_ids = set()
+    # Get security groups from resources, grouped by region
+    sg_ids_by_region = {region: set() for region in args.regions}
     for instance in resources["instances"]:
-        all_sg_ids.update(instance.get("security_groups", []))
+        region = instance.get("region")
+        if region in sg_ids_by_region:
+            sg_ids_by_region[region].update(instance.get("security_groups", []))
     for rds in resources["rds_instances"]:
-        all_sg_ids.update(rds.get("security_groups", []))
-    resources["security_groups"] = discovery.discover_security_groups(list(all_sg_ids))
+        region = rds.get("region")
+        if region in sg_ids_by_region:
+            sg_ids_by_region[region].update(rds.get("security_groups", []))
+    
+    # Convert sets to lists
+    sg_ids_by_region = {region: list(sg_ids) for region, sg_ids in sg_ids_by_region.items()}
+    resources["security_groups"] = discovery.discover_security_groups(sg_ids_by_region)
     
     if args.include_route53:
         resources["route53_zones"] = discovery.discover_route53_zones()
@@ -103,10 +118,16 @@ def generate_mermaid(args):
     
     # Generate diagram
     account_info = discovery.get_account_info()
-    diagram = generator.generate_mermaid_diagram(
-        resources=resources,
-        account_name=args.account or account_info.get('account_id', 'Unknown'),
-        vpc_id=args.vpc_id
+    diagram = generator.generate_diagram(
+        account_info=account_info,
+        vpcs=resources.get("vpcs", []),
+        subnets=resources.get("subnets", []),
+        instances=resources.get("instances", []),
+        load_balancers=resources.get("load_balancers", []),
+        rds_instances=resources.get("rds_instances", []),
+        security_groups=resources.get("security_groups", {}),
+        route53_zones=resources.get("route53_zones", []),
+        regions=args.regions
     )
     
     # Save or print
@@ -124,10 +145,11 @@ def generate_mermaid(args):
 
 def generate_dot(args):
     """Generate DOT/Graphviz diagram."""
-    discovery = AWSResourceDiscovery(region=args.region, profile=args.profile)
+    discovery = AWSResourceDiscovery(regions=args.regions, profile=args.profile)
     generator = DiagramsGenerator()
     
-    print(f"Generating DOT diagram for {args.region}...")
+    regions_str = ", ".join(args.regions)
+    print(f"Generating DOT diagram for {regions_str}...")
     
     # Discover resources
     resources = {
@@ -138,13 +160,20 @@ def generate_dot(args):
         "vpcs": discovery.discover_vpcs() if not args.vpc_id else []
     }
     
-    # Get security groups from resources
-    all_sg_ids = set()
+    # Get security groups from resources, grouped by region
+    sg_ids_by_region = {region: set() for region in args.regions}
     for instance in resources["instances"]:
-        all_sg_ids.update(instance.get("security_groups", []))
+        region = instance.get("region")
+        if region in sg_ids_by_region:
+            sg_ids_by_region[region].update(instance.get("security_groups", []))
     for rds in resources["rds_instances"]:
-        all_sg_ids.update(rds.get("security_groups", []))
-    resources["security_groups"] = discovery.discover_security_groups(list(all_sg_ids))
+        region = rds.get("region")
+        if region in sg_ids_by_region:
+            sg_ids_by_region[region].update(rds.get("security_groups", []))
+    
+    # Convert sets to lists
+    sg_ids_by_region = {region: list(sg_ids) for region, sg_ids in sg_ids_by_region.items()}
+    resources["security_groups"] = discovery.discover_security_groups(sg_ids_by_region)
     
     if args.include_route53:
         resources["route53_zones"] = discovery.discover_route53_zones()
@@ -182,7 +211,7 @@ def generate_dot(args):
         rds_instances=resources.get("rds_instances", []),
         security_groups=resources.get("security_groups", {}),
         route53_zones=resources.get("route53_zones", []),
-        region=args.region,
+        regions=args.regions,
         output_path=output_path,
         sg_options=sg_options,
         lb_options=lb_options
@@ -203,7 +232,10 @@ def main():
     default_region = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
     
     parser = argparse.ArgumentParser(description="AWS Infrastructure Diagram Generator")
-    parser.add_argument("--region", default=default_region, help=f"AWS region (default: {default_region})")
+    parser.add_argument("--regions", nargs="+", default=[default_region], 
+                       help=f"AWS regions to scan (default: {default_region}). Can specify multiple: --regions us-east-1 us-west-2")
+    parser.add_argument("--region", dest="regions", action="append", 
+                       help="Single region (deprecated, use --regions instead)")
     parser.add_argument("--profile", help="AWS profile to use")
     parser.add_argument("--account", help="Account name/alias for diagram")
     parser.add_argument("--vpc-id", help="Specific VPC ID to diagram")
@@ -251,6 +283,10 @@ def main():
                            help="Output format (default: png)")
     
     args = parser.parse_args()
+    
+    # Handle legacy --region argument
+    if hasattr(args, 'region') and args.region and args.regions == [default_region]:
+        args.regions = [args.region]
     
     # Apply security group presets
     if args.sg_preset:

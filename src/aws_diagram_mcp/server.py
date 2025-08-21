@@ -25,9 +25,9 @@ class GenerateDiagramArgs(BaseModel):
     aws_account: str = Field(
         description="AWS account ID or alias for the diagram"
     )
-    region: str = Field(
-        default="us-east-1",
-        description="AWS region to scan for resources"
+    regions: List[str] = Field(
+        default=["us-east-1"],
+        description="AWS regions to scan for resources"
     )
     profile: Optional[str] = Field(
         default=None,
@@ -57,9 +57,9 @@ class GenerateDiagramDotArgs(BaseModel):
     aws_account: str = Field(
         description="AWS account ID or alias for the diagram"
     )
-    region: str = Field(
-        default="us-east-1",
-        description="AWS region to scan for resources"
+    regions: List[str] = Field(
+        default=["us-east-1"],
+        description="AWS regions to scan for resources"
     )
     profile: Optional[str] = Field(
         default=None,
@@ -90,9 +90,9 @@ class GenerateDiagramDotArgs(BaseModel):
 class DiscoverResourcesArgs(BaseModel):
     """Arguments for discovering AWS resources."""
     
-    region: str = Field(
-        default="us-east-1",
-        description="AWS region to scan"
+    regions: List[str] = Field(
+        default=["us-east-1"],
+        description="AWS regions to scan"
     )
     profile: Optional[str] = Field(
         default=None,
@@ -120,7 +120,7 @@ async def generate_aws_diagram(args: GenerateDiagramArgs) -> Dict[str, Any]:
     try:
         logger.info(f"Starting diagram generation for account: {args.aws_account}")
         
-        discovery = AWSResourceDiscovery(region=args.region, profile=args.profile)
+        discovery = AWSResourceDiscovery(regions=args.regions, profile=args.profile)
         
         logger.info("Getting account information...")
         account_info = discovery.get_account_info()
@@ -148,14 +148,22 @@ async def generate_aws_diagram(args: GenerateDiagramArgs) -> Dict[str, Any]:
         logger.info("Discovering RDS instances...")
         rds_instances = discovery.discover_rds_instances(args.vpc_id)
         
-        all_sg_ids = set()
+        # Group security group IDs by region
+        sg_ids_by_region = {region: set() for region in args.regions}
         for instance in instances:
-            all_sg_ids.update(instance.get("security_groups", []))
+            region = instance.get("region")
+            if region in sg_ids_by_region:
+                sg_ids_by_region[region].update(instance.get("security_groups", []))
         for rds in rds_instances:
-            all_sg_ids.update(rds.get("security_groups", []))
+            region = rds.get("region")
+            if region in sg_ids_by_region:
+                sg_ids_by_region[region].update(rds.get("security_groups", []))
         
-        logger.info(f"Discovering {len(all_sg_ids)} security groups...")
-        security_groups = discovery.discover_security_groups(list(all_sg_ids))
+        # Convert sets to lists
+        sg_ids_by_region = {region: list(sg_ids) for region, sg_ids in sg_ids_by_region.items()}
+        total_sg_count = sum(len(sg_ids) for sg_ids in sg_ids_by_region.values())
+        logger.info(f"Discovering {total_sg_count} security groups across {len(args.regions)} regions...")
+        security_groups = discovery.discover_security_groups(sg_ids_by_region)
         
         route53_zones = []
         if args.include_route53:
@@ -178,7 +186,7 @@ async def generate_aws_diagram(args: GenerateDiagramArgs) -> Dict[str, Any]:
             rds_instances=rds_instances,
             security_groups=security_groups,
             route53_zones=route53_zones,
-            region=args.region
+            regions=args.regions
         )
         
         output_path = args.output_path
@@ -226,7 +234,7 @@ async def discover_aws_resources(args: DiscoverResourcesArgs) -> Dict[str, Any]:
     before generating a diagram.
     """
     try:
-        discovery = AWSResourceDiscovery(region=args.region, profile=args.profile)
+        discovery = AWSResourceDiscovery(regions=args.regions, profile=args.profile)
         resources = {}
         
         resource_types = args.resource_types
@@ -256,16 +264,23 @@ async def discover_aws_resources(args: DiscoverResourcesArgs) -> Dict[str, Any]:
             resources["rds_instances"] = discovery.discover_rds_instances()
         
         if "security_groups" in resource_types:
-            all_sg_ids = set()
+            # Group security group IDs by region
+            sg_ids_by_region = {region: set() for region in args.regions}
             if "instances" in resources:
                 for instance in resources["instances"]:
-                    all_sg_ids.update(instance.get("security_groups", []))
+                    region = instance.get("region")
+                    if region in sg_ids_by_region:
+                        sg_ids_by_region[region].update(instance.get("security_groups", []))
             if "rds_instances" in resources:
                 for rds in resources["rds_instances"]:
-                    all_sg_ids.update(rds.get("security_groups", []))
+                    region = rds.get("region")
+                    if region in sg_ids_by_region:
+                        sg_ids_by_region[region].update(rds.get("security_groups", []))
             
-            if all_sg_ids:
-                resources["security_groups"] = discovery.discover_security_groups(list(all_sg_ids))
+            # Convert sets to lists and discover if any SGs found
+            sg_ids_by_region = {region: list(sg_ids) for region, sg_ids in sg_ids_by_region.items()}
+            if any(sg_ids for sg_ids in sg_ids_by_region.values()):
+                resources["security_groups"] = discovery.discover_security_groups(sg_ids_by_region)
         
         if "route53" in resource_types:
             resources["route53_zones"] = discovery.discover_route53_zones()
@@ -275,7 +290,7 @@ async def discover_aws_resources(args: DiscoverResourcesArgs) -> Dict[str, Any]:
         
         return {
             "success": True,
-            "region": args.region,
+            "regions": args.regions,
             "resources": resources
         }
         
@@ -350,7 +365,7 @@ async def generate_aws_diagram_dot(args: GenerateDiagramDotArgs) -> Dict[str, An
     try:
         logger.info(f"Starting DOT diagram generation for account: {args.aws_account}")
         
-        discovery = AWSResourceDiscovery(region=args.region, profile=args.profile)
+        discovery = AWSResourceDiscovery(regions=args.regions, profile=args.profile)
         
         logger.info("Getting account information...")
         account_info = discovery.get_account_info()
@@ -378,14 +393,22 @@ async def generate_aws_diagram_dot(args: GenerateDiagramDotArgs) -> Dict[str, An
         logger.info("Discovering RDS instances...")
         rds_instances = discovery.discover_rds_instances(args.vpc_id)
         
-        all_sg_ids = set()
+        # Group security group IDs by region
+        sg_ids_by_region = {region: set() for region in args.regions}
         for instance in instances:
-            all_sg_ids.update(instance.get("security_groups", []))
+            region = instance.get("region")
+            if region in sg_ids_by_region:
+                sg_ids_by_region[region].update(instance.get("security_groups", []))
         for rds in rds_instances:
-            all_sg_ids.update(rds.get("security_groups", []))
+            region = rds.get("region")
+            if region in sg_ids_by_region:
+                sg_ids_by_region[region].update(rds.get("security_groups", []))
         
-        logger.info(f"Discovering {len(all_sg_ids)} security groups...")
-        security_groups = discovery.discover_security_groups(list(all_sg_ids))
+        # Convert sets to lists
+        sg_ids_by_region = {region: list(sg_ids) for region, sg_ids in sg_ids_by_region.items()}
+        total_sg_count = sum(len(sg_ids) for sg_ids in sg_ids_by_region.values())
+        logger.info(f"Discovering {total_sg_count} security groups across {len(args.regions)} regions...")
+        security_groups = discovery.discover_security_groups(sg_ids_by_region)
         
         route53_zones = []
         if args.include_route53:
@@ -418,7 +441,7 @@ async def generate_aws_diagram_dot(args: GenerateDiagramDotArgs) -> Dict[str, An
             rds_instances=rds_instances,
             security_groups=security_groups,
             route53_zones=route53_zones,
-            region=args.region,
+            regions=args.regions,
             output_path=str(output_path)
         )
         

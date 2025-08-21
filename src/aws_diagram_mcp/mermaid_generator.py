@@ -25,9 +25,12 @@ class MermaidDiagramGenerator:
         rds_instances: List[Dict[str, Any]],
         security_groups: Dict[str, Any],
         route53_zones: List[Dict[str, Any]],
-        region: str = "us-east-1"
+        regions: List[str] = None
     ) -> str:
         """Generate a complete Mermaid diagram."""
+        if regions is None:
+            regions = ["us-east-1"]
+            
         self.node_counter = 0
         self.node_map = {}
         self.connections = []
@@ -39,11 +42,24 @@ class MermaidDiagramGenerator:
         
         diagram_lines.append(f'    subgraph Account["{account_name}"]')
         
+        # Group VPCs by region
+        vpcs_by_region = defaultdict(list)
         for vpc in vpcs:
-            vpc_lines = self._generate_vpc_section(
-                vpc, region, subnets, instances, load_balancers, rds_instances
-            )
-            diagram_lines.extend(vpc_lines)
+            region = vpc.get("region", "us-east-1")
+            vpcs_by_region[region].append(vpc)
+        
+        # Generate region sections
+        for region in sorted(vpcs_by_region.keys()):
+            if vpcs_by_region[region]:
+                diagram_lines.append(f'        subgraph Region{region.replace("-", "")}["{region.upper()}"]')
+                for vpc in vpcs_by_region[region]:
+                    vpc_lines = self._generate_vpc_section(
+                        vpc, region, subnets, instances, load_balancers, rds_instances
+                    )
+                    # Add extra indentation for region subgraph
+                    vpc_lines = ["    " + line for line in vpc_lines]
+                    diagram_lines.extend(vpc_lines)
+                diagram_lines.append("        end")
         
         diagram_lines.append("    end")
         

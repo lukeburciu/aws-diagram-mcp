@@ -11,14 +11,24 @@ logger = logging.getLogger(__name__)
 class AWSResourceDiscovery:
     """Discovers AWS resources for diagram generation."""
     
-    def __init__(self, region: str = "us-east-1", profile: Optional[str] = None):
-        self.region = region
+    def __init__(self, regions: List[str] = None, profile: Optional[str] = None):
+        if regions is None:
+            regions = ["us-east-1"]
+        self.regions = regions
         self.session = boto3.Session(profile_name=profile) if profile else boto3.Session()
-        self.ec2 = self.session.client("ec2", region_name=region)
-        self.elbv2 = self.session.client("elbv2", region_name=region)
-        self.rds = self.session.client("rds", region_name=region)
+        
+        # Create clients for each region
+        self.regional_clients = {}
+        for region in self.regions:
+            self.regional_clients[region] = {
+                'ec2': self.session.client("ec2", region_name=region),
+                'elbv2': self.session.client("elbv2", region_name=region),
+                'rds': self.session.client("rds", region_name=region),
+                'acm': self.session.client("acm", region_name=region)
+            }
+        
+        # Route53 and STS are global services
         self.route53 = self.session.client("route53")
-        self.acm = self.session.client("acm", region_name=region)
         self.sts = self.session.client("sts")
     
     def get_account_info(self) -> Dict[str, str]:
@@ -35,176 +45,189 @@ class AWSResourceDiscovery:
             return {}
     
     def discover_vpcs(self) -> List[Dict[str, Any]]:
-        """Discover all VPCs."""
-        try:
-            response = self.ec2.describe_vpcs()
-            vpcs = []
-            for vpc in response["Vpcs"]:
-                vpc_info = {
-                    "vpc_id": vpc["VpcId"],
-                    "cidr_block": vpc["CidrBlock"],
-                    "state": vpc["State"],
-                    "is_default": vpc.get("IsDefault", False),
-                    "tags": self._process_tags(vpc.get("Tags", []))
-                }
-                vpcs.append(vpc_info)
-            return vpcs
-        except ClientError as e:
-            logger.error(f"Error discovering VPCs: {e}")
-            return []
+        """Discover all VPCs across all regions."""
+        all_vpcs = []
+        for region in self.regions:
+            try:
+                ec2_client = self.regional_clients[region]['ec2']
+                response = ec2_client.describe_vpcs()
+                for vpc in response["Vpcs"]:
+                    vpc_info = {
+                        "vpc_id": vpc["VpcId"],
+                        "cidr_block": vpc["CidrBlock"],
+                        "state": vpc["State"],
+                        "is_default": vpc.get("IsDefault", False),
+                        "region": region,
+                        "tags": self._process_tags(vpc.get("Tags", []))
+                    }
+                    all_vpcs.append(vpc_info)
+            except ClientError as e:
+                logger.error(f"Error discovering VPCs in region {region}: {e}")
+        return all_vpcs
     
     def discover_subnets(self, vpc_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Discover subnets."""
-        try:
-            filters = []
-            if vpc_id:
-                filters.append({"Name": "vpc-id", "Values": [vpc_id]})
-            
-            response = self.ec2.describe_subnets(Filters=filters)
-            subnets = []
-            for subnet in response["Subnets"]:
-                subnet_info = {
-                    "subnet_id": subnet["SubnetId"],
-                    "vpc_id": subnet["VpcId"],
-                    "cidr_block": subnet["CidrBlock"],
-                    "availability_zone": subnet["AvailabilityZone"],
-                    "state": subnet["State"],
-                    "tags": self._process_tags(subnet.get("Tags", [])),
-                    "tier": self._determine_subnet_tier(subnet)
-                }
-                subnets.append(subnet_info)
-            return subnets
-        except ClientError as e:
-            logger.error(f"Error discovering subnets: {e}")
-            return []
+        """Discover subnets across all regions."""
+        all_subnets = []
+        for region in self.regions:
+            try:
+                ec2_client = self.regional_clients[region]['ec2']
+                filters = []
+                if vpc_id:
+                    filters.append({"Name": "vpc-id", "Values": [vpc_id]})
+                
+                response = ec2_client.describe_subnets(Filters=filters)
+                for subnet in response["Subnets"]:
+                    subnet_info = {
+                        "subnet_id": subnet["SubnetId"],
+                        "vpc_id": subnet["VpcId"],
+                        "cidr_block": subnet["CidrBlock"],
+                        "availability_zone": subnet["AvailabilityZone"],
+                        "state": subnet["State"],
+                        "region": region,
+                        "tags": self._process_tags(subnet.get("Tags", [])),
+                        "tier": self._determine_subnet_tier(subnet)
+                    }
+                    all_subnets.append(subnet_info)
+            except ClientError as e:
+                logger.error(f"Error discovering subnets in region {region}: {e}")
+        return all_subnets
     
     def discover_ec2_instances(self, vpc_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Discover EC2 instances."""
-        try:
-            filters = []
-            if vpc_id:
-                filters.append({"Name": "vpc-id", "Values": [vpc_id]})
-            
-            response = self.ec2.describe_instances(Filters=filters)
-            instances = []
-            for reservation in response["Reservations"]:
-                for instance in reservation["Instances"]:
-                    if instance["State"]["Name"] == "running":
-                        instance_info = {
-                            "instance_id": instance["InstanceId"],
-                            "instance_type": instance["InstanceType"],
-                            "private_ip": instance.get("PrivateIpAddress"),
-                            "public_ip": instance.get("PublicIpAddress"),
-                            "subnet_id": instance.get("SubnetId"),
-                            "vpc_id": instance.get("VpcId"),
-                            "state": instance["State"]["Name"],
-                            "name": self._get_tag_value(instance.get("Tags", []), "Name"),
-                            "security_groups": [sg["GroupId"] for sg in instance.get("SecurityGroups", [])],
-                            "tags": self._process_tags(instance.get("Tags", []))
-                        }
-                        instances.append(instance_info)
-            return instances
-        except ClientError as e:
-            logger.error(f"Error discovering EC2 instances: {e}")
-            return []
+        """Discover EC2 instances across all regions."""
+        all_instances = []
+        for region in self.regions:
+            try:
+                ec2_client = self.regional_clients[region]['ec2']
+                filters = []
+                if vpc_id:
+                    filters.append({"Name": "vpc-id", "Values": [vpc_id]})
+                
+                response = ec2_client.describe_instances(Filters=filters)
+                for reservation in response["Reservations"]:
+                    for instance in reservation["Instances"]:
+                        if instance["State"]["Name"] == "running":
+                            instance_info = {
+                                "instance_id": instance["InstanceId"],
+                                "instance_type": instance["InstanceType"],
+                                "private_ip": instance.get("PrivateIpAddress"),
+                                "public_ip": instance.get("PublicIpAddress"),
+                                "subnet_id": instance.get("SubnetId"),
+                                "vpc_id": instance.get("VpcId"),
+                                "state": instance["State"]["Name"],
+                                "region": region,
+                                "name": self._get_tag_value(instance.get("Tags", []), "Name"),
+                                "security_groups": [sg["GroupId"] for sg in instance.get("SecurityGroups", [])],
+                                "tags": self._process_tags(instance.get("Tags", []))
+                            }
+                            all_instances.append(instance_info)
+            except ClientError as e:
+                logger.error(f"Error discovering EC2 instances in region {region}: {e}")
+        return all_instances
     
     def discover_load_balancers(self, vpc_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Discover load balancers."""
-        try:
-            response = self.elbv2.describe_load_balancers()
-            load_balancers = []
-            
-            for lb in response["LoadBalancers"]:
-                if vpc_id and lb["VpcId"] != vpc_id:
-                    continue
+        """Discover load balancers across all regions."""
+        all_load_balancers = []
+        for region in self.regions:
+            try:
+                elbv2_client = self.regional_clients[region]['elbv2']
+                response = elbv2_client.describe_load_balancers()
                 
-                lb_arn = lb["LoadBalancerArn"]
-                lb_info = {
-                    "name": lb["LoadBalancerName"],
-                    "arn": lb_arn,
-                    "type": lb["Type"],
-                    "scheme": lb["Scheme"],
-                    "state": lb["State"]["Code"],
-                    "vpc_id": lb["VpcId"],
-                    "dns_name": lb["DNSName"],
-                    "ips": self._get_load_balancer_ips(lb),
-                    "target_groups": self._get_target_groups(lb_arn),
-                    "listeners": self._get_listeners(lb_arn),
-                    "subnets": [az["SubnetId"] for az in lb.get("AvailabilityZones", [])]
-                }
-                load_balancers.append(lb_info)
-            return load_balancers
-        except ClientError as e:
-            logger.error(f"Error discovering load balancers: {e}")
-            return []
+                for lb in response["LoadBalancers"]:
+                    if vpc_id and lb["VpcId"] != vpc_id:
+                        continue
+                    
+                    lb_arn = lb["LoadBalancerArn"]
+                    lb_info = {
+                        "name": lb["LoadBalancerName"],
+                        "arn": lb_arn,
+                        "type": lb["Type"],
+                        "scheme": lb["Scheme"],
+                        "state": lb["State"]["Code"],
+                        "vpc_id": lb["VpcId"],
+                        "region": region,
+                        "dns_name": lb["DNSName"],
+                        "ips": self._get_load_balancer_ips(lb),
+                        "target_groups": self._get_target_groups(lb_arn, region),
+                        "listeners": self._get_listeners(lb_arn, region),
+                        "subnets": [az["SubnetId"] for az in lb.get("AvailabilityZones", [])]
+                    }
+                    all_load_balancers.append(lb_info)
+            except ClientError as e:
+                logger.error(f"Error discovering load balancers in region {region}: {e}")
+        return all_load_balancers
     
     def discover_rds_instances(self, vpc_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Discover RDS instances."""
-        try:
-            response = self.rds.describe_db_instances()
-            rds_instances = []
-            
-            for db in response["DBInstances"]:
-                db_subnet_group = db.get("DBSubnetGroup", {})
-                db_vpc_id = db_subnet_group.get("VpcId")
+        """Discover RDS instances across all regions."""
+        all_rds_instances = []
+        for region in self.regions:
+            try:
+                rds_client = self.regional_clients[region]['rds']
+                response = rds_client.describe_db_instances()
                 
-                if vpc_id and db_vpc_id != vpc_id:
-                    continue
-                
-                rds_info = {
-                    "db_instance_id": db["DBInstanceIdentifier"],
-                    "engine": db["Engine"],
-                    "engine_version": db["EngineVersion"],
-                    "instance_class": db["DBInstanceClass"],
-                    "status": db["DBInstanceStatus"],
-                    "endpoint": db.get("Endpoint", {}).get("Address"),
-                    "port": db.get("Endpoint", {}).get("Port"),
-                    "vpc_id": db_vpc_id,
-                    "subnet_group": db_subnet_group.get("DBSubnetGroupName"),
-                    "availability_zone": db.get("AvailabilityZone"),
-                    "security_groups": [sg["VpcSecurityGroupId"] for sg in db.get("VpcSecurityGroups", [])]
-                }
-                rds_instances.append(rds_info)
-            return rds_instances
-        except ClientError as e:
-            logger.error(f"Error discovering RDS instances: {e}")
-            return []
+                for db in response["DBInstances"]:
+                    db_subnet_group = db.get("DBSubnetGroup", {})
+                    db_vpc_id = db_subnet_group.get("VpcId")
+                    
+                    if vpc_id and db_vpc_id != vpc_id:
+                        continue
+                    
+                    rds_info = {
+                        "db_instance_id": db["DBInstanceIdentifier"],
+                        "engine": db["Engine"],
+                        "engine_version": db["EngineVersion"],
+                        "instance_class": db["DBInstanceClass"],
+                        "status": db["DBInstanceStatus"],
+                        "endpoint": db.get("Endpoint", {}).get("Address"),
+                        "port": db.get("Endpoint", {}).get("Port"),
+                        "vpc_id": db_vpc_id,
+                        "region": region,
+                        "subnet_group": db_subnet_group.get("DBSubnetGroupName"),
+                        "availability_zone": db.get("AvailabilityZone"),
+                        "security_groups": [sg["VpcSecurityGroupId"] for sg in db.get("VpcSecurityGroups", [])]
+                    }
+                    all_rds_instances.append(rds_info)
+            except ClientError as e:
+                logger.error(f"Error discovering RDS instances in region {region}: {e}")
+        return all_rds_instances
     
-    def discover_security_groups(self, group_ids: List[str]) -> Dict[str, Any]:
-        """Discover security group rules."""
-        if not group_ids:
-            return {}
+    def discover_security_groups(self, group_ids_by_region: Dict[str, List[str]]) -> Dict[str, Any]:
+        """Discover security group rules across all regions."""
+        all_sg_rules = {}
         
-        try:
-            response = self.ec2.describe_security_groups(GroupIds=group_ids)
-            sg_rules = {}
-            
-            for sg in response["SecurityGroups"]:
-                rules = {
-                    "ingress": [],
-                    "egress": []
-                }
+        for region, group_ids in group_ids_by_region.items():
+            if not group_ids or region not in self.regions:
+                continue
                 
-                for rule in sg.get("IpPermissions", []):
-                    processed_rule = self._process_sg_rule(rule, "ingress")
-                    if processed_rule:
-                        rules["ingress"].append(processed_rule)
+            try:
+                ec2_client = self.regional_clients[region]['ec2']
+                response = ec2_client.describe_security_groups(GroupIds=group_ids)
                 
-                for rule in sg.get("IpPermissionsEgress", []):
-                    processed_rule = self._process_sg_rule(rule, "egress")
-                    if processed_rule:
-                        rules["egress"].append(processed_rule)
-                
-                sg_rules[sg["GroupId"]] = {
-                    "name": sg["GroupName"],
-                    "description": sg.get("Description", ""),
-                    "rules": rules
-                }
-            
-            return sg_rules
-        except ClientError as e:
-            logger.error(f"Error discovering security groups: {e}")
-            return {}
+                for sg in response["SecurityGroups"]:
+                    rules = {
+                        "ingress": [],
+                        "egress": []
+                    }
+                    
+                    for rule in sg.get("IpPermissions", []):
+                        processed_rule = self._process_sg_rule(rule, "ingress")
+                        if processed_rule:
+                            rules["ingress"].append(processed_rule)
+                    
+                    for rule in sg.get("IpPermissionsEgress", []):
+                        processed_rule = self._process_sg_rule(rule, "egress")
+                        if processed_rule:
+                            rules["egress"].append(processed_rule)
+                    
+                    all_sg_rules[sg["GroupId"]] = {
+                        "name": sg["GroupName"],
+                        "description": sg.get("Description", ""),
+                        "region": region,
+                        "rules": rules
+                    }
+            except ClientError as e:
+                logger.error(f"Error discovering security groups in region {region}: {e}")
+        
+        return all_sg_rules
     
     def discover_route53_zones(self) -> List[Dict[str, Any]]:
         """Discover Route53 hosted zones."""
@@ -227,22 +250,24 @@ class AWSResourceDiscovery:
             return []
     
     def discover_acm_certificates(self) -> List[Dict[str, Any]]:
-        """Discover ACM certificates."""
-        try:
-            response = self.acm.list_certificates()
-            certificates = []
-            
-            for cert in response["CertificateSummaryList"]:
-                cert_info = {
-                    "arn": cert["CertificateArn"],
-                    "domain": cert["DomainName"],
-                    "status": cert.get("Status", "UNKNOWN")
-                }
-                certificates.append(cert_info)
-            return certificates
-        except ClientError as e:
-            logger.error(f"Error discovering ACM certificates: {e}")
-            return []
+        """Discover ACM certificates across all regions."""
+        all_certificates = []
+        for region in self.regions:
+            try:
+                acm_client = self.regional_clients[region]['acm']
+                response = acm_client.list_certificates()
+                
+                for cert in response["CertificateSummaryList"]:
+                    cert_info = {
+                        "arn": cert["CertificateArn"],
+                        "domain": cert["DomainName"],
+                        "status": cert.get("Status", "UNKNOWN"),
+                        "region": region
+                    }
+                    all_certificates.append(cert_info)
+            except ClientError as e:
+                logger.error(f"Error discovering ACM certificates in region {region}: {e}")
+        return all_certificates
     
     def _process_tags(self, tags: List[Dict]) -> Dict[str, str]:
         """Process AWS tags into a dictionary."""
@@ -278,15 +303,16 @@ class AWSResourceDiscovery:
                     ips.append(addr["PrivateIPv4Address"])
         return ips
     
-    def _get_target_groups(self, lb_arn: str) -> List[Dict[str, Any]]:
+    def _get_target_groups(self, lb_arn: str, region: str) -> List[Dict[str, Any]]:
         """Get target groups for a load balancer."""
         try:
-            response = self.elbv2.describe_target_groups(LoadBalancerArn=lb_arn)
+            elbv2_client = self.regional_clients[region]['elbv2']
+            response = elbv2_client.describe_target_groups(LoadBalancerArn=lb_arn)
             target_groups = []
             
             for tg in response["TargetGroups"]:
                 tg_arn = tg["TargetGroupArn"]
-                targets = self._get_targets(tg_arn)
+                targets = self._get_targets(tg_arn, region)
                 target_groups.append({
                     "name": tg["TargetGroupName"],
                     "arn": tg_arn,
@@ -298,10 +324,11 @@ class AWSResourceDiscovery:
         except ClientError:
             return []
     
-    def _get_targets(self, tg_arn: str) -> List[Dict[str, Any]]:
+    def _get_targets(self, tg_arn: str, region: str) -> List[Dict[str, Any]]:
         """Get targets for a target group."""
         try:
-            response = self.elbv2.describe_target_health(TargetGroupArn=tg_arn)
+            elbv2_client = self.regional_clients[region]['elbv2']
+            response = elbv2_client.describe_target_health(TargetGroupArn=tg_arn)
             targets = []
             for target in response["TargetHealthDescriptions"]:
                 targets.append({
@@ -313,10 +340,11 @@ class AWSResourceDiscovery:
         except ClientError:
             return []
     
-    def _get_listeners(self, lb_arn: str) -> List[Dict[str, Any]]:
+    def _get_listeners(self, lb_arn: str, region: str) -> List[Dict[str, Any]]:
         """Get listeners for a load balancer."""
         try:
-            response = self.elbv2.describe_listeners(LoadBalancerArn=lb_arn)
+            elbv2_client = self.regional_clients[region]['elbv2']
+            response = elbv2_client.describe_listeners(LoadBalancerArn=lb_arn)
             listeners = []
             for listener in response["Listeners"]:
                 listener_info = {
