@@ -31,7 +31,7 @@ def discover_resources(args):
         resources["vpcs"] = discovery.discover_vpcs()
         print(f"Found {len(resources['vpcs'])} VPCs")
     
-    resources["instances"] = discovery.discover_instances(vpc_id=args.vpc_id)
+    resources["instances"] = discovery.discover_ec2_instances(vpc_id=args.vpc_id)
     print(f"Found {len(resources['instances'])} EC2 instances")
     
     resources["load_balancers"] = discovery.discover_load_balancers(vpc_id=args.vpc_id)
@@ -43,7 +43,14 @@ def discover_resources(args):
     resources["subnets"] = discovery.discover_subnets(vpc_id=args.vpc_id)
     print(f"Found {len(resources['subnets'])} subnets")
     
-    resources["security_groups"] = discovery.discover_security_groups(vpc_id=args.vpc_id)
+    # Get all security groups from instances, load balancers, and RDS
+    all_sg_ids = set()
+    for instance in resources["instances"]:
+        all_sg_ids.update(instance.get("security_groups", []))
+    for rds in resources["rds_instances"]:
+        all_sg_ids.update(rds.get("security_groups", []))
+    
+    resources["security_groups"] = discovery.discover_security_groups(list(all_sg_ids))
     print(f"Found {len(resources['security_groups'])} security groups")
     
     if args.include_route53:
@@ -51,7 +58,7 @@ def discover_resources(args):
         print(f"Found {len(resources['route53_zones'])} Route53 zones")
     
     if args.include_acm:
-        resources["certificates"] = discovery.discover_certificates()
+        resources["certificates"] = discovery.discover_acm_certificates()
         print(f"Found {len(resources['certificates'])} ACM certificates")
     
     # Output results
@@ -72,19 +79,26 @@ def generate_mermaid(args):
     
     # Discover resources
     resources = {
-        "instances": discovery.discover_instances(vpc_id=args.vpc_id),
+        "instances": discovery.discover_ec2_instances(vpc_id=args.vpc_id),
         "load_balancers": discovery.discover_load_balancers(vpc_id=args.vpc_id),
         "rds_instances": discovery.discover_rds_instances(vpc_id=args.vpc_id),
         "subnets": discovery.discover_subnets(vpc_id=args.vpc_id),
-        "security_groups": discovery.discover_security_groups(vpc_id=args.vpc_id),
         "vpcs": discovery.discover_vpcs() if not args.vpc_id else []
     }
+    
+    # Get security groups from resources
+    all_sg_ids = set()
+    for instance in resources["instances"]:
+        all_sg_ids.update(instance.get("security_groups", []))
+    for rds in resources["rds_instances"]:
+        all_sg_ids.update(rds.get("security_groups", []))
+    resources["security_groups"] = discovery.discover_security_groups(list(all_sg_ids))
     
     if args.include_route53:
         resources["route53_zones"] = discovery.discover_route53_zones()
     
     if args.include_acm:
-        resources["certificates"] = discovery.discover_certificates()
+        resources["certificates"] = discovery.discover_acm_certificates()
     
     # Generate diagram
     account_info = discovery.get_account_info()
@@ -116,19 +130,26 @@ def generate_dot(args):
     
     # Discover resources
     resources = {
-        "instances": discovery.discover_instances(vpc_id=args.vpc_id),
+        "instances": discovery.discover_ec2_instances(vpc_id=args.vpc_id),
         "load_balancers": discovery.discover_load_balancers(vpc_id=args.vpc_id),
         "rds_instances": discovery.discover_rds_instances(vpc_id=args.vpc_id),
         "subnets": discovery.discover_subnets(vpc_id=args.vpc_id),
-        "security_groups": discovery.discover_security_groups(vpc_id=args.vpc_id),
         "vpcs": discovery.discover_vpcs() if not args.vpc_id else []
     }
+    
+    # Get security groups from resources
+    all_sg_ids = set()
+    for instance in resources["instances"]:
+        all_sg_ids.update(instance.get("security_groups", []))
+    for rds in resources["rds_instances"]:
+        all_sg_ids.update(rds.get("security_groups", []))
+    resources["security_groups"] = discovery.discover_security_groups(list(all_sg_ids))
     
     if args.include_route53:
         resources["route53_zones"] = discovery.discover_route53_zones()
     
     if args.include_acm:
-        resources["certificates"] = discovery.discover_certificates()
+        resources["certificates"] = discovery.discover_acm_certificates()
     
     # Generate diagram
     account_info = discovery.get_account_info()
