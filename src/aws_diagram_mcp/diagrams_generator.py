@@ -237,7 +237,7 @@ class DiagramsGenerator:
                             style="bold"
                         ) >> target_node
         
-        # Security Group based connections
+        # Security Group based connections (filter out intra-subnet traffic)
         sg_connections = self._analyze_security_group_connections(
             instances, rds_instances, security_groups
         )
@@ -296,8 +296,19 @@ class DiagramsGenerator:
         rds_instances: List[Dict[str, Any]],
         security_groups: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
-        """Analyze security group rules to determine connections."""
+        """Analyze security group rules to determine inter-subnet connections only."""
         connections = []
+        
+        # Create instance ID to subnet mapping
+        instance_subnet_map = {}
+        for instance in instances:
+            instance_subnet_map[instance["instance_id"]] = instance.get("subnet_id")
+        
+        # Create RDS ID to subnet mapping (RDS typically spans multiple subnets)
+        rds_subnet_map = {}
+        for rds in rds_instances:
+            # RDS instances don't have a single subnet, so we'll always allow connections to them
+            rds_subnet_map[rds["db_instance_id"]] = None
         
         # Map security groups to instances
         instance_sg_map = {}
@@ -330,10 +341,16 @@ class DiagramsGenerator:
                         protocol = self._normalize_protocol(rule.get("protocol", "tcp"))
                         label = f"{port}/{protocol}" if port else protocol
                         
-                        # Instance to instance connections
+                        # Instance to instance connections (only inter-subnet)
                         for from_id in from_instances:
+                            from_subnet = instance_subnet_map.get(from_id)
+                            
                             for to_id in to_instances:
-                                if from_id != to_id:
+                                to_subnet = instance_subnet_map.get(to_id)
+                                
+                                # Only show connections between different subnets or when subnet is unknown
+                                if (from_id != to_id and 
+                                    (from_subnet != to_subnet or not from_subnet or not to_subnet)):
                                     connections.append({
                                         "from": from_id,
                                         "to": to_id,
@@ -341,7 +358,7 @@ class DiagramsGenerator:
                                         "type": "instance"
                                     })
                             
-                            # Instance to database connections
+                            # Instance to database connections (always show - databases span subnets)
                             for to_id in to_rds:
                                 connections.append({
                                     "from": from_id,
