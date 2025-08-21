@@ -156,20 +156,26 @@ def generate_dot(args):
     account_info = discovery.get_account_info()
     output_path = args.output or "aws_infrastructure"
     
-    result = generator.generate_diagrams_diagram(
-        resources=resources,
-        account_name=args.account or account_info.get('account_id', 'Unknown'),
-        output_path=output_path,
-        output_format=args.format,
-        vpc_id=args.vpc_id
+    result = generator.generate_diagram(
+        account_info=account_info,
+        vpcs=resources.get("vpcs", []),
+        subnets=resources.get("subnets", []),
+        instances=resources.get("instances", []),
+        load_balancers=resources.get("load_balancers", []),
+        rds_instances=resources.get("rds_instances", []),
+        security_groups=resources.get("security_groups", {}),
+        route53_zones=resources.get("route53_zones", []),
+        region=args.region,
+        output_path=output_path
     )
     
-    if result.get('success'):
+    if result:
         print(f"DOT diagram generated successfully:")
-        for file_type, path in result.get('output_files', {}).items():
-            print(f"  {file_type.upper()}: {path}")
+        for file_type, path in result.items():
+            if path:
+                print(f"  {file_type.upper()}: {path}")
     else:
-        print(f"Error generating diagram: {result.get('error')}")
+        print(f"Error generating diagram")
         sys.exit(1)
 
 
