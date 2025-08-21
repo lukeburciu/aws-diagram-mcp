@@ -96,6 +96,27 @@ Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/
 }
 ```
 
+or for Claude Code (`${PROJECT_DIR}/.mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "aws-diagram": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/lukeburciu/aws-diagram-mcp@main",
+        "aws_diagram_mcp"
+      ],
+      "env": {
+        "AWS_PROFILE": "${AWS_PROFILE}",
+        "AWS_DEFAULT_REGION": "${AWS_DEFAULT_REGION}"
+      }
+    }
+  }
+}
+```
+
 ### 3. Test the Setup
 
 ```bash
