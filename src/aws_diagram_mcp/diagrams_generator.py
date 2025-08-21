@@ -57,10 +57,9 @@ class DiagramsGenerator:
             show=False,
             direction="TB",
             graph_attr={
-                "splines": "ortho",
-                "nodesep": "1.0",
-                "ranksep": "1.5",
-                "bgcolor": "white"
+                "rankdir": "TB",
+                "nodesep": "0.5",
+                "ranksep": "1.0"
             },
             outformat=["dot", "png", "svg"]
         ) as diagram:
@@ -225,7 +224,7 @@ class DiagramsGenerator:
                         if lb["dns_name"] in value:
                             lb_node = self.nodes.get(lb["arn"])
                             if lb_node:
-                                zone_node >> Edge(label="53/tcp", color="blue") >> lb_node
+                                zone_node >> Edge(label="53/tcp") >> lb_node
         
         # Load Balancer to Target connections
         for lb in load_balancers:
@@ -241,11 +240,7 @@ class DiagramsGenerator:
                     target_id = target["id"]
                     target_node = self.nodes.get(target_id)
                     if target_node:
-                        lb_node >> Edge(
-                            label=f"{port}/{protocol}",
-                            color="green",
-                            style="bold"
-                        ) >> target_node
+                        lb_node >> Edge(label=f"{port}/{protocol}") >> target_node
         
         # Security Group based connections with smart filtering
         sg_connections = self._analyze_security_group_connections(
@@ -257,14 +252,11 @@ class DiagramsGenerator:
             to_node = self.nodes.get(conn["to"])
             
             if from_node and to_node:
-                edge_color = "red" if conn.get("type") == "database" else "orange"
-                edge_style = "dashed" if conn.get("type") == "database" else "solid"
-                
-                from_node >> Edge(
-                    label=conn.get("label", ""),
-                    color=edge_color,
-                    style=edge_style
-                ) >> to_node
+                label = conn.get("label", "")
+                if label:
+                    from_node >> Edge(label=label) >> to_node
+                else:
+                    from_node >> to_node
     
     def _organize_resources_by_subnet(
         self,
