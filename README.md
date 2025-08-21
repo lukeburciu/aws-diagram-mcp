@@ -105,8 +105,8 @@ or for Claude Code (`${PROJECT_DIR}/.mcp.json`):
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/lukeburciu/aws-diagram-mcp@main",
-        "aws_diagram_mcp"
+        "git+https://github.com/lukeburciu/aws-diagram-mcp",
+        "aws-diagram-mcp"
       ],
       "env": {
         "AWS_PROFILE": "${AWS_PROFILE}",
