@@ -18,9 +18,14 @@ This comprehensive guide covers all aspects of using the AWS Infrastructure Diag
 Start by exploring what resources exist in your AWS account:
 
 ```python
-# Discover all resources in the default region
+# Discover all resources in a single region
 result = discover_aws_resources({
-    "region": "us-east-1"
+    "regions": ["us-east-1"]
+})
+
+# Discover resources across multiple regions
+result = discover_aws_resources({
+    "regions": ["us-east-1", "us-west-2", "eu-west-1"]
 })
 
 print(f"Found {len(result['resources']['vpcs'])} VPCs")
@@ -33,10 +38,16 @@ print(f"Found {len(result['resources']['load_balancers'])} load balancers")
 Once you know what resources exist, generate a diagram:
 
 ```python
-# Generate a simple Mermaid diagram
+# Generate a simple Mermaid diagram for one region
 result = generate_aws_diagram({
     "aws_account": "my-company",
-    "region": "us-east-1"
+    "regions": ["us-east-1"]
+})
+
+# Generate diagram for multiple regions
+result = generate_aws_diagram({
+    "aws_account": "my-company",
+    "regions": ["us-east-1", "us-west-2"]
 })
 
 if result["success"]:
@@ -50,11 +61,18 @@ else:
 For presentations and formal documentation:
 
 ```python
-# Generate a DOT diagram with AWS icons
+# Generate a DOT diagram with AWS icons for one region
 result = generate_aws_diagram_dot({
     "aws_account": "my-company",
-    "region": "us-east-1",
+    "regions": ["us-east-1"],
     "output_format": "png"
+})
+
+# Generate multi-region diagram
+result = generate_aws_diagram_dot({
+    "aws_account": "my-company",
+    "regions": ["us-east-1", "us-west-2", "eu-west-1"],
+    "output_format": "svg"
 })
 
 print(f"PNG diagram: {result['output_files']['png_file']}")
@@ -67,7 +85,7 @@ print(f"PNG diagram: {result['output_files']['png_file']}")
 **Purpose:** Explore AWS resources without generating diagrams
 
 **Parameters:**
-- `region` (str): AWS region to scan (default: "us-east-1")
+- `regions` (list[str]): AWS regions to scan (default: ["us-east-1"])
 - `profile` (str, optional): AWS CLI profile name
 - `resource_types` (list): Resource types to discover (default: ["all"])
 
@@ -84,9 +102,9 @@ print(f"PNG diagram: {result['output_files']['png_file']}")
 
 **Example Usage:**
 ```python
-# Discover only EC2 and RDS resources
+# Discover only EC2 and RDS resources across multiple regions
 result = discover_aws_resources({
-    "region": "us-west-2",
+    "regions": ["us-west-2", "us-east-1"],
     "profile": "production",
     "resource_types": ["instances", "rds"]
 })
@@ -98,7 +116,7 @@ result = discover_aws_resources({
 
 **Parameters:**
 - `aws_account` (str, required): Account identifier for diagram title
-- `region` (str): AWS region (default: "us-east-1")
+- `regions` (list[str]): AWS regions to scan (default: ["us-east-1"])
 - `profile` (str, optional): AWS CLI profile
 - `output_path` (str, optional): Custom output file path
 - `vpc_id` (str, optional): Generate diagram for specific VPC only
@@ -137,7 +155,7 @@ result = discover_aws_resources({
 
 **Parameters:**
 - `aws_account` (str, required): Account identifier
-- `region` (str): AWS region (default: "us-east-1")
+- `regions` (list[str]): AWS regions to scan (default: ["us-east-1"])
 - `profile` (str, optional): AWS CLI profile
 - `output_path` (str, optional): Output file path (without extension)
 - `vpc_id` (str, optional): Generate diagram for specific VPC

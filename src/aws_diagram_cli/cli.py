@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Standalone CLI for AWS Infrastructure Diagram Generation
-Run AWS discovery and generate diagrams without MCP/LLM.
+AWS Infrastructure Diagram CLI Tool
+Discover AWS resources and generate comprehensive architecture diagrams.
 """
 
 import argparse
@@ -10,9 +10,9 @@ import os
 import sys
 from pathlib import Path
 
-from src.aws_diagram_mcp.aws_discovery import AWSResourceDiscovery
-from src.aws_diagram_mcp.mermaid_generator import MermaidDiagramGenerator
-from src.aws_diagram_mcp.diagrams_generator import DiagramsGenerator
+from .aws_discovery import AWSResourceDiscovery
+from .generators.mermaid import MermaidDiagramGenerator
+from .generators.diagrams import DiagramsGenerator
 
 
 def discover_resources(args):
