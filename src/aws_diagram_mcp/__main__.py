@@ -2,5 +2,11 @@
 
 from .server import serve
 
-if __name__ == "__main__":
+
+def main():
+    """Main entry point for the aws-diagram-mcp command."""
     serve()
+
+
+if __name__ == "__main__":
+    main()
