@@ -6,6 +6,7 @@ Run AWS discovery and generate diagrams without MCP/LLM.
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -173,8 +174,11 @@ def generate_dot(args):
 
 
 def main():
+    # Get default region from environment variable or fallback to us-east-1
+    default_region = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
+    
     parser = argparse.ArgumentParser(description="AWS Infrastructure Diagram Generator")
-    parser.add_argument("--region", default="us-east-1", help="AWS region (default: us-east-1)")
+    parser.add_argument("--region", default=default_region, help=f"AWS region (default: {default_region})")
     parser.add_argument("--profile", help="AWS profile to use")
     parser.add_argument("--account", help="Account name/alias for diagram")
     parser.add_argument("--vpc-id", help="Specific VPC ID to diagram")
