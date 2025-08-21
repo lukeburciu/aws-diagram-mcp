@@ -35,7 +35,8 @@ class DiagramsGenerator:
         route53_zones: List[Dict[str, Any]],
         region: str = "us-east-1",
         output_path: str = "aws_infrastructure",
-        sg_options: Optional[Dict[str, Any]] = None
+        sg_options: Optional[Dict[str, Any]] = None,
+        lb_options: Optional[Dict[str, Any]] = None
     ) -> str:
         """Generate a complete DOT diagram using Python Diagrams."""
         self.nodes = {}
@@ -57,9 +58,10 @@ class DiagramsGenerator:
             show=False,
             direction="TB",
             graph_attr={
-                "rankdir": "TB",
-                "nodesep": "0.5",
-                "ranksep": "1.0"
+                "splines": "ortho",
+                "nodesep": "1.0",
+                "ranksep": "1.5",
+                "bgcolor": "white"
             },
             outformat=["dot", "png", "svg"]
         ) as diagram:
@@ -70,13 +72,14 @@ class DiagramsGenerator:
             # Process each VPC
             for vpc in vpcs:
                 self._create_vpc_cluster(
-                    vpc, region, subnets, instances, load_balancers, rds_instances
+                    vpc, region, subnets, instances, load_balancers, rds_instances, 
+                    lb_options or {}
                 )
             
             # Create connections after all nodes are created
             self._create_connections(
                 instances, load_balancers, rds_instances, security_groups, route53_zones, 
-                subnets, sg_options or {}
+                subnets, sg_options or {}, lb_options or {}
             )
         
         # The outformat parameter generates all files automatically
@@ -108,7 +111,8 @@ class DiagramsGenerator:
         subnets: List[Dict[str, Any]],
         instances: List[Dict[str, Any]],
         load_balancers: List[Dict[str, Any]],
-        rds_instances: List[Dict[str, Any]]
+        rds_instances: List[Dict[str, Any]],
+        lb_options: Dict[str, Any]
     ) -> None:
         """Create VPC cluster with all its resources."""
         vpc_id = vpc["vpc_id"]
@@ -122,6 +126,9 @@ class DiagramsGenerator:
                 vpc_instances = [i for i in instances if i["vpc_id"] == vpc_id]
                 vpc_lbs = [lb for lb in load_balancers if lb["vpc_id"] == vpc_id]
                 vpc_rds = [rds for rds in rds_instances if rds["vpc_id"] == vpc_id]
+                
+                # Apply load balancer filtering
+                vpc_lbs = self._filter_load_balancers(vpc_lbs, vpc_instances, lb_options)
                 
                 # Organize resources by subnet
                 subnet_resources = self._organize_resources_by_subnet(
@@ -208,7 +215,8 @@ class DiagramsGenerator:
         security_groups: Dict[str, Any],
         route53_zones: List[Dict[str, Any]],
         subnets: List[Dict[str, Any]],
-        sg_options: Dict[str, Any]
+        sg_options: Dict[str, Any],
+        lb_options: Dict[str, Any]
     ) -> None:
         """Create all connections between nodes."""
         
@@ -226,21 +234,34 @@ class DiagramsGenerator:
                             if lb_node:
                                 zone_node >> Edge(label="53/tcp") >> lb_node
         
-        # Load Balancer to Target connections
+        # Load Balancer to Target connections (only for load balancers that exist in nodes)
+        lb_detail = lb_options.get("detail", "ports")
+        filter_unhealthy = lb_options.get("filter_unhealthy", False)
+        
         for lb in load_balancers:
             lb_node = self.nodes.get(lb["arn"])
             if not lb_node:
                 continue
             
             for tg in lb.get("target_groups", []):
-                port = tg.get("port", 443)
-                protocol = tg.get("protocol", "tcp").lower()
+                # Generate label for this target group
+                label = self._get_lb_connection_label(tg, lb_detail)
                 
                 for target in tg.get("targets", []):
                     target_id = target["id"]
                     target_node = self.nodes.get(target_id)
+                    
                     if target_node:
-                        lb_node >> Edge(label=f"{port}/{protocol}") >> target_node
+                        # Apply health filtering if enabled
+                        if filter_unhealthy:
+                            target_health = target.get("health", "healthy")
+                            if target_health != "healthy":
+                                continue
+                        
+                        if label:
+                            lb_node >> Edge(label=label) >> target_node
+                        else:
+                            lb_node >> target_node
         
         # Security Group based connections with smart filtering
         sg_connections = self._analyze_security_group_connections(
@@ -291,6 +312,63 @@ class DiagramsGenerator:
                         break
         
         return subnet_resources
+    
+    def _filter_load_balancers(
+        self,
+        load_balancers: List[Dict[str, Any]],
+        instances: List[Dict[str, Any]],
+        lb_options: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Filter load balancers based on display options."""
+        display_mode = lb_options.get("display", "all")
+        
+        if display_mode == "none":
+            return []
+        elif display_mode == "all":
+            return load_balancers
+        elif display_mode == "connected-only":
+            return self._get_connected_load_balancers(load_balancers, instances, lb_options)
+        
+        return load_balancers
+    
+    def _get_connected_load_balancers(
+        self,
+        load_balancers: List[Dict[str, Any]],
+        instances: List[Dict[str, Any]],
+        lb_options: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Get load balancers that have valid downstream connections."""
+        connected_lbs = []
+        filter_unhealthy = lb_options.get("filter_unhealthy", False)
+        
+        # Create set of instance IDs for quick lookup
+        instance_ids = {inst["instance_id"] for inst in instances}
+        
+        for lb in load_balancers:
+            has_connections = False
+            
+            for tg in lb.get("target_groups", []):
+                for target in tg.get("targets", []):
+                    target_id = target["id"]
+                    
+                    # Check if target exists in our instance list
+                    if target_id in instance_ids:
+                        # If filtering unhealthy, check target health
+                        if filter_unhealthy:
+                            target_health = target.get("health", "healthy")
+                            if target_health != "healthy":
+                                continue
+                        
+                        has_connections = True
+                        break
+                
+                if has_connections:
+                    break
+            
+            if has_connections:
+                connected_lbs.append(lb)
+        
+        return connected_lbs
     
     def _analyze_security_group_connections(
         self,
@@ -543,6 +621,33 @@ class DiagramsGenerator:
             return label
         
         return ""
+    
+    def _get_lb_connection_label(
+        self,
+        target_group: Dict[str, Any],
+        detail_level: str
+    ) -> str:
+        """Generate load balancer connection labels based on detail level."""
+        if detail_level == "minimal":
+            return ""
+        
+        port = target_group.get("port", 443)
+        protocol = target_group.get("protocol", "tcp").lower()
+        
+        if detail_level == "ports":
+            return str(port)
+        elif detail_level == "full":
+            health_check = target_group.get("health_check", {})
+            hc_port = health_check.get("port", "")
+            hc_path = health_check.get("path", "")
+            
+            label = f"{port}/{protocol}"
+            if hc_port and hc_path:
+                label += f" (hc:{hc_port}{hc_path})"
+            
+            return label
+        
+        return f"{port}/{protocol}"
     
     def _normalize_protocol(self, protocol: str) -> str:
         """Normalize protocol string."""

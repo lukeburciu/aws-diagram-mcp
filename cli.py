@@ -166,6 +166,13 @@ def generate_dot(args):
         "only_ingress": args.sg_only_ingress
     }
     
+    # Prepare load balancer options
+    lb_options = {
+        "display": args.lb_display,
+        "detail": args.lb_detail,
+        "filter_unhealthy": args.lb_filter_unhealthy
+    }
+    
     result = generator.generate_diagram(
         account_info=account_info,
         vpcs=resources.get("vpcs", []),
@@ -177,7 +184,8 @@ def generate_dot(args):
         route53_zones=resources.get("route53_zones", []),
         region=args.region,
         output_path=output_path,
-        sg_options=sg_options
+        sg_options=sg_options,
+        lb_options=lb_options
     )
     
     if result:
@@ -220,6 +228,15 @@ def main():
     sg_group.add_argument("--sg-preset", choices=["clean", "network", "security", "debug"], 
                          help="Predefined security group display presets")
     
+    # Load Balancer behavior flags
+    lb_group = parser.add_argument_group("Load Balancer Options", "Control how load balancers are displayed")
+    lb_group.add_argument("--lb-display", choices=["all", "connected-only", "none"], 
+                         default="all", help="Load balancer display mode (default: all)")
+    lb_group.add_argument("--lb-detail", choices=["minimal", "ports", "full"], 
+                         default="ports", help="Load balancer connection label detail (default: ports)")
+    lb_group.add_argument("--lb-filter-unhealthy", action="store_true", 
+                         help="Hide connections to unhealthy targets")
+    
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
     
     # Discover command
@@ -256,22 +273,33 @@ def main():
 
 
 def apply_sg_preset(args):
-    """Apply predefined security group presets."""
+    """Apply predefined security group and load balancer presets."""
     if args.sg_preset == "clean":
+        # Clean architecture view
         args.sg_flows = "none"
         args.sg_detail = "minimal"
+        args.lb_display = "none"
     elif args.sg_preset == "network":
+        # Network design view
         args.sg_flows = "tier-crossing"
         args.sg_direction = "north-south"
         args.sg_detail = "ports"
+        args.lb_display = "connected-only"
+        args.lb_detail = "ports"
     elif args.sg_preset == "security":
+        # Security audit view
         args.sg_flows = "inter-subnet"
         args.sg_detail = "full"
         args.sg_only_ingress = True
+        args.lb_display = "all"
+        args.lb_detail = "full"
     elif args.sg_preset == "debug":
+        # Troubleshooting view
         args.sg_flows = "external-only"
         args.sg_detail = "full"
         args.sg_filter_ephemeral = True
+        args.lb_display = "connected-only"
+        args.lb_detail = "full"
 
 
 if __name__ == "__main__":
