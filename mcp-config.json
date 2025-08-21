@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "aws-diagram": {
+      "command": "uv",
+      "args": [
+        "run",
+        "python",
+        "-m",
+        "aws_diagram_mcp"
+      ],
+      "cwd": "/absolute/path/to/aws-diagram-mcp",
+      "env": {
+        "AWS_PROFILE": "default",
+        "AWS_DEFAULT_REGION": "us-east-1",
+        "LOG_LEVEL": "INFO"
+      }
+    }
+  }
+}
