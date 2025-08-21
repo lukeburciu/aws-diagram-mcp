@@ -33,12 +33,15 @@ class DiagramsGenerator:
         rds_instances: List[Dict[str, Any]],
         security_groups: Dict[str, Any],
         route53_zones: List[Dict[str, Any]],
-        region: str = "us-east-1",
+        regions: List[str] = None,
         output_path: str = "aws_infrastructure",
         sg_options: Optional[Dict[str, Any]] = None,
         lb_options: Optional[Dict[str, Any]] = None
     ) -> str:
         """Generate a complete DOT diagram using Python Diagrams."""
+        if regions is None:
+            regions = ["us-east-1"]
+            
         self.nodes = {}
         self.connections = []
         
@@ -69,12 +72,21 @@ class DiagramsGenerator:
             # Create Route53 nodes first (they go at the top)
             route53_nodes = self._create_route53_nodes(route53_zones)
             
-            # Process each VPC
+            # Group VPCs by region and process each region
+            vpcs_by_region = defaultdict(list)
             for vpc in vpcs:
-                self._create_vpc_cluster(
-                    vpc, region, subnets, instances, load_balancers, rds_instances, 
-                    lb_options or {}
-                )
+                vpc_region = vpc.get("region", "us-east-1")
+                vpcs_by_region[vpc_region].append(vpc)
+            
+            # Process each region
+            for region in sorted(vpcs_by_region.keys()):
+                if vpcs_by_region[region]:
+                    with Cluster(f"Region: {region.upper()}"):
+                        for vpc in vpcs_by_region[region]:
+                            self._create_vpc_cluster(
+                                vpc, region, subnets, instances, load_balancers, rds_instances, 
+                                lb_options or {}
+                            )
             
             # Create connections after all nodes are created
             self._create_connections(
