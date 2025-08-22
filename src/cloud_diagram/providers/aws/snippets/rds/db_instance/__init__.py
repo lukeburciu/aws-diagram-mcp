@@ -5,7 +5,7 @@ from diagrams.aws.database import RDS
 from diagrams import Edge
 
 from ...base import ConfiguredSnippet
-from ...utils.discovery import Resource, AWSClient
+from ....utils.discovery import Resource, AWSClient
 
 
 class RDSInstanceSnippet(ConfiguredSnippet):

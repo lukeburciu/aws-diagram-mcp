@@ -5,7 +5,7 @@ from diagrams.aws.security import IAMRole  # Using IAMRole as closest security i
 from diagrams import Edge
 
 from ...base import ConfiguredSnippet
-from ...utils.discovery import Resource, AWSClient
+from ....utils.discovery import Resource, AWSClient
 
 
 class SecurityGroupSnippet(ConfiguredSnippet):

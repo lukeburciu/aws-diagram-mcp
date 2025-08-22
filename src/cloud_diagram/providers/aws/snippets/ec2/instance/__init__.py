@@ -5,7 +5,7 @@ from diagrams.aws.compute import EC2
 from diagrams import Edge
 
 from ...base import ConfiguredSnippet
-from ...utils.discovery import Resource, AWSClient
+from ....utils.discovery import Resource, AWSClient
 
 
 class EC2InstanceSnippet(ConfiguredSnippet):

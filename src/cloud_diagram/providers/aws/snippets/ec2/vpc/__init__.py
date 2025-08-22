@@ -5,7 +5,7 @@ from diagrams.aws.network import VPC
 from diagrams import Edge
 
 from ...base import ConfiguredSnippet
-from ...utils.discovery import Resource, AWSClient
+from ....utils.discovery import Resource, AWSClient
 
 
 class VPCSnippet(ConfiguredSnippet):
