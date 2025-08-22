@@ -1,0 +1,103 @@
+# RDS DB Instance Default Configuration
+# This file defines the default rendering settings for RDS database instances
+
+# Display settings - what information to show
+display:
+  show_engine_version: true
+  show_multi_az: true
+  show_backup_retention: false
+  show_endpoint: true
+  show_instance_class: true
+  show_storage: false
+  show_encryption: false
+  show_maintenance_window: false
+  show_auto_minor_version_upgrade: false
+  show_availability_zone: false
+  show_read_replicas: true
+  show_parameter_group: false
+  show_option_group: false
+
+# Label formatting
+label:
+  # Available variables: {name}, {id}, {engine}, {version}, {instance_class}, 
+  # {storage}, {multi_az}, {endpoint}, {port}, {az}
+  primary_format: "{name}"
+  secondary_format: "{engine} {version}"
+  tertiary_format: "{instance_class}"
+  max_label_length: 50
+  truncate_style: "ellipsis"  # "ellipsis", "wrap", "none"
+
+# Visual settings
+visual:
+  icon_style: "engine_specific"  # "generic", "engine_specific"
+  icon_size: "medium"  # "small", "medium", "large"
+  show_status_indicator: true  # Show colored dot for instance status
+  status_colors:
+    available: "green"
+    backing-up: "yellow"
+    creating: "blue"
+    deleting: "red"
+    failed: "red"
+    maintenance: "orange"
+    modifying: "yellow"
+    rebooting: "orange"
+    stopped: "gray"
+
+# Clustering and grouping
+clustering:
+  group_by: "subnet_group"  # "subnet_group", "vpc", "availability_zone", "none"
+  cluster_label_format: "DB Subnet Group: {name}"
+  show_cluster_border: true
+  cluster_style: "dashed"
+
+# Connection settings
+connections:
+  show_read_replica_links: true
+  show_cluster_member_links: true
+  read_replica_style: "dashed"
+  cluster_member_style: "dotted"
+  connection_label_format: "{port}/{protocol}"
+  
+# Filtering rules
+filters:
+  exclude_states:
+    - "deleting"
+    - "deleted"
+    - "failed"
+  exclude_engines: []
+  include_only_engines: []
+  exclude_instance_classes: []
+  min_storage_gb: null
+  max_storage_gb: null
+
+# Engine-specific settings
+engines:
+  mysql:
+    default_port: 3306
+    icon_color: "blue"
+    show_version: true
+  postgresql:
+    default_port: 5432
+    icon_color: "dark_blue"
+    show_version: true
+  mariadb:
+    default_port: 3306
+    icon_color: "navy"
+    show_version: true
+  oracle:
+    default_port: 1521
+    icon_color: "red"
+    show_version: false
+  sqlserver:
+    default_port: 1433
+    icon_color: "red"
+    show_version: false
+  aurora:
+    show_cluster_info: true
+    highlight_writer: true
+  aurora-mysql:
+    default_port: 3306
+    show_cluster_info: true
+  aurora-postgresql:
+    default_port: 5432
+    show_cluster_info: true

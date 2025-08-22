@@ -1,18 +1,19 @@
-# AWS Infrastructure Diagram CLI
+# Cloud Infrastructure Diagram CLI
 
-A command-line tool that generates comprehensive AWS infrastructure diagrams in both Mermaid and DOT/Graphviz formats. This tool automatically discovers AWS resources and creates hierarchical diagrams showing VPCs, subnets, EC2 instances, load balancers, RDS instances, and their security group connections.
+A modular command-line tool that generates comprehensive cloud infrastructure diagrams in DOT/Graphviz format. This tool automatically discovers cloud resources and creates hierarchical diagrams showing VPCs/VNets, subnets, compute instances, load balancers, databases, and their network connections.
+
+Currently supports AWS with extensible architecture for Azure, GCP, and other cloud providers.
 
 ## Features
 
-- **Comprehensive Resource Discovery**: Automatically discovers VPCs, subnets, EC2 instances, load balancers, RDS instances, security groups, Route53 zones, and ACM certificates
-- **Multi-Region Support**: Discover and visualize resources across multiple AWS regions in a single diagram
+- **Multi-Cloud Support**: Extensible provider architecture (AWS implemented, Azure/GCP ready)
+- **Comprehensive Resource Discovery**: Automatically discovers VPCs, subnets, compute instances, load balancers, databases, security groups, DNS zones, and certificates
+- **Multi-Region Support**: Discover and visualize resources across multiple cloud regions in a single diagram
+- **Configuration-Driven**: YAML-based configuration with enterprise naming conventions and filters
 - **Hierarchical Organization**: Organizes resources by Account > Region > VPC > Subnet tiers
-- **Security Group Analysis**: Maps actual connections between resources based on security group rules
-- **Load Balancer Mapping**: Shows real target group connections, not assumptions
-- **Dual Output Formats**: 
-  - **Mermaid**: Text-based diagrams for documentation and web display
-  - **DOT/Graphviz**: Professional diagrams with AWS icons (PNG, SVG, PDF output)
-- **Flexible Configuration**: Supports AWS profiles, regions, and selective resource discovery
+- **Security Analysis**: Maps actual connections between resources based on security group rules
+- **Professional Diagrams**: DOT/Graphviz format with cloud provider icons (PNG, SVG, PDF output)
+- **Enterprise Features**: Custom naming conventions, resource filtering, visual customization
 
 ## Installation
 
@@ -20,7 +21,7 @@ A command-line tool that generates comprehensive AWS infrastructure diagrams in 
 
 ```bash
 # Clone or create the project
-cd aws-diagram-cli
+cd cloud-diagram-cli
 
 # Install dependencies
 uv sync
@@ -192,20 +193,21 @@ The project includes a standalone CLI tool for generating diagrams without MCP:
 
 ```bash
 # Generate diagrams using the CLI
-./cli.py [OPTIONS] COMMAND
+uv run python -m cloud_diagram [OPTIONS] COMMAND
 
 # Available commands:
-./cli.py discover    # Discover AWS resources and output JSON
-./cli.py mermaid     # Generate Mermaid diagram
-./cli.py dot         # Generate DOT/Graphviz diagram
+cloud-diagram discover    # Discover cloud resources and output JSON
+cloud-diagram diagram     # Generate infrastructure diagram
 
 # Global options:
---regions REGIONS         # AWS regions to scan (can specify multiple)
---profile PROFILE         # AWS profile to use
---vpc-id VPC_ID          # Specific VPC to diagram
+--provider PROVIDER       # Cloud provider (aws, azure, gcp) 
+--regions REGIONS         # Cloud regions to scan (can specify multiple)
+--profile PROFILE         # Authentication profile to use
+--config CONFIG           # Path to YAML configuration file
+--vpc-id VPC_ID          # Specific VPC/Network to diagram
 --output PATH            # Output file path
---include-route53        # Include Route53 zones (default: true)
---include-acm            # Include ACM certificates (default: true)
+--include-route53        # Include Route53/DNS zones (default: true)
+--include-acm            # Include SSL certificates (default: true)
 
 # Security group options (see Configuration section above)
 --sg-flows {none,inter-subnet,tier-crossing,external-only}
@@ -221,22 +223,85 @@ The project includes a standalone CLI tool for generating diagrams without MCP:
 
 ```bash
 # Discover all resources in a single region and save to JSON
-uv run python -m aws_diagram_cli --regions us-west-2 --output resources.json discover
+uv run python -m cloud_diagram --provider aws --regions us-west-2 --output resources.json discover
 
 # Discover resources across multiple regions
-uv run python -m aws_diagram_cli --regions us-east-1 us-west-2 eu-west-1 discover
+uv run python -m cloud_diagram --provider aws --regions us-east-1 us-west-2 eu-west-1 discover
 
 # Generate clean architecture diagram for multiple regions
-uv run python -m aws_diagram_cli --regions us-east-1 us-west-2 --sg-preset clean dot --output architecture.png
+uv run python -m cloud_diagram --provider aws --regions us-east-1 us-west-2 --sg-preset clean diagram --output architecture.png
 
-# Generate Mermaid diagram for specific VPC across regions
-uv run python -m aws_diagram_cli --regions us-east-1 us-west-2 --vpc-id vpc-12345678 --output vpc-diagram.md mermaid
+# Generate diagram for specific VPC across regions
+uv run python -m cloud_diagram --provider aws --regions us-east-1 us-west-2 --vpc-id vpc-12345678 --output vpc-diagram.png diagram
 
 # Generate detailed security audit diagram
-uv run python -m aws_diagram_cli --sg-preset security --sg-detail full dot --format svg
+uv run python -m cloud_diagram --provider aws --sg-preset security --sg-detail full diagram --format svg
+
+# Use custom configuration file
+uv run python -m cloud_diagram --provider aws --config my-enterprise-config.yaml diagram
 
 # Generate network design diagram focusing on cross-tier traffic
-uv run python -m aws_diagram_cli --sg-flows tier-crossing --sg-direction north-south dot --output network-design
+uv run python -m cloud_diagram --provider aws --sg-flows tier-crossing --sg-direction north-south diagram --output network-design
+```
+
+## Configuration
+
+### YAML Configuration Files
+
+Create custom configuration files to standardize diagram generation across your organization:
+
+```yaml
+# enterprise-config.yaml
+diagram:
+  output_format: png
+  layout: hierarchical
+  title: "Company Infrastructure"
+
+naming_conventions:
+  vpc_format: "{name} ({cidr})"
+  instance_format: "{name}\\n{type}\\n{ip}"
+  subnet_format: "{tier}: {name}\\n{cidr}"
+
+resource_filters:
+  exclude_tags:
+    - Environment: dev
+    - Environment: test
+  include_only_regions:
+    - us-east-1
+    - us-west-2
+  exclude_resource_types: []
+
+hierarchy_rules:
+  group_by: [region, vpc, subnet_tier]
+  subnet_tiers:
+    public: ["*public*", "*dmz*", "*web*"]
+    private: ["*private*", "*app*", "*application*"] 
+    restricted: ["*db*", "*data*", "*database*"]
+
+visual_rules:
+  icon_size: medium
+  show_connections: true
+  connection_labels: ports
+  color_scheme: aws_official
+  layout_direction: top_to_bottom
+
+# AWS-specific settings
+aws:
+  services:
+    ec2:
+      show_instance_state: true
+      group_by_instance_type: false
+    rds:
+      show_engine_version: true
+      show_multi_az: true
+    elb:
+      show_health_checks: true
+      show_ssl_certificates: true
+```
+
+Use configuration files with:
+```bash
+uv run python -m cloud_diagram --provider aws --config enterprise-config.yaml diagram
 ```
 
 ## CLI Commands
@@ -256,20 +321,6 @@ uv run python -m aws_diagram_cli --regions us-east-1 --output resources.json dis
 uv run python -m aws_diagram_cli --vpc-id vpc-12345678 discover
 ```
 
-### mermaid
-
-Generate Mermaid text-based diagrams for documentation.
-
-```bash
-# Generate Mermaid diagram for multiple regions
-uv run python -m aws_diagram_cli --regions us-east-1 us-west-2 mermaid
-
-# Save Mermaid diagram to file
-uv run python -m aws_diagram_cli --output diagram.md mermaid
-
-# Generate diagram with specific security group settings
-uv run python -m aws_diagram_cli --sg-preset clean mermaid
-```
 
 ### dot
 
@@ -325,34 +376,6 @@ Account
 
 ## Example Output
 
-### Mermaid Format
-
-```mermaid
-graph TD
-    subgraph Account["Account: 123456789012"]
-        subgraph VPC_vpc_12345678["VPC: Production"]
-            subgraph Region_us_east_1["Region: us-east-1"]
-                subgraph Subnet_subnet_public["Public Subnet"]
-                    alb_prod[/"ALB: prod-alb<br/>10.0.1.10<br/>10.0.2.10"/]
-                end
-                subgraph Subnet_subnet_app["Application Subnet"]
-                    ec2_web1["EC2: web-01<br/>10.0.3.10"]
-                    ec2_web2["EC2: web-02<br/>10.0.3.20"]
-                end
-                subgraph Subnet_subnet_db["Restricted Subnet"]
-                    rds_main[("RDS: main-db<br/>mysql")]
-                end
-            end
-        end
-    end
-    
-    route53_prod(["Route53: example.com"]) 
-    route53_prod -->|"53/tcp"| alb_prod
-    alb_prod ==>|"443/tcp"| ec2_web1
-    alb_prod ==>|"443/tcp"| ec2_web2
-    ec2_web1 -.->|"3306/tcp"| rds_main
-    ec2_web2 -.->|"3306/tcp"| rds_main
-```
 
 ### DOT/Graphviz Format
 
@@ -447,11 +470,6 @@ uv run python -c "from aws_diagram_mcp import serve; serve()"
    ```
    Solution: Ensure your AWS credentials have the required read permissions
 
-4. **Mermaid Syntax Errors**
-   ```
-   Error: Unclosed subgraph
-   ```
-   Solution: Use the `validate_mermaid_syntax` tool to check for syntax issues
 
 5. **Graphviz Not Found**
    ```

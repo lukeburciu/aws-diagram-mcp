@@ -1,0 +1,77 @@
+# Subnet Default Configuration
+# This file defines the default rendering settings for Subnets
+
+# Display settings - what information to show
+display:
+  show_subnet_id: false
+  show_cidr_block: true
+  show_availability_zone: true
+  show_state: false
+  show_vpc_id: false
+  show_map_public_ip: true
+  show_available_ips: false
+  show_tier: true
+
+# Label formatting
+label:
+  # Available variables: {name}, {id}, {cidr_block}, {az}, {state}, {vpc_id}, {tier}
+  primary_format: "{name}"
+  secondary_format: "{cidr_block}"
+  tertiary_format: "{az}"
+  max_label_length: 50
+  truncate_style: "ellipsis"  # "ellipsis", "wrap", "none"
+
+# Visual settings
+visual:
+  icon_style: "tier_specific"  # "generic", "tier_specific"
+  icon_size: "medium"  # "small", "medium", "large"
+  show_status_indicator: true  # Show colored dot for subnet state
+  status_colors:
+    available: "green"
+    pending: "yellow"
+  tier_colors:
+    public: "lightblue"
+    private: "lightgray"
+    restricted: "lightyellow"
+
+# Clustering and grouping
+clustering:
+  group_by: "availability_zone"  # "availability_zone", "vpc", "tier", "none"
+  cluster_label_format: "{type}: {name}"
+  show_cluster_border: true
+  cluster_style: "solid"
+
+# Connection settings
+connections:
+  show_route_table_connections: true
+  show_nat_gateway_connections: true
+  connection_label_format: "{type}"
+  
+# Filtering rules
+filters:
+  exclude_states:
+    - "deleted"
+  exclude_tiers: []
+  include_only_tiers: []
+  exclude_availability_zones: []
+  include_only_availability_zones: []
+  exclude_cidrs: []
+  include_only_cidrs: []
+  min_available_ips: null
+  max_available_ips: null
+
+# Subnet tier classification
+tier_rules:
+  public:
+    - "*public*"
+    - "*dmz*"
+    - "*web*"
+  private:
+    - "*private*"
+    - "*app*"
+    - "*application*"
+  restricted:
+    - "*db*"
+    - "*data*"
+    - "*database*"
+    - "*rds*"

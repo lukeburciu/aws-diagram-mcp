@@ -1,0 +1,73 @@
+# Route53 Hosted Zone Default Configuration
+# This file defines the default rendering settings for Route53 hosted zones
+
+# Display settings - what information to show
+display:
+  show_zone_type: true  # public or private
+  show_record_count: true
+  show_record_types: false  # A, AAAA, CNAME, MX, etc.
+  show_name_servers: false
+  show_dnssec: false
+  show_comment: false
+  show_vpc_associations: true  # for private zones
+
+# Label formatting
+label:
+  # Available variables: {name}, {zone_id}, {type}, {record_count}, {comment}
+  primary_format: "{name}"
+  secondary_format: "{type}"
+  tertiary_format: ""  # Optional third line
+  max_label_length: 50
+  truncate_style: "ellipsis"
+
+# Visual settings
+visual:
+  icon_style: "route53"  # "route53", "generic"
+  icon_size: "medium"
+  show_status_indicator: false  # Route53 zones don't have complex states
+  zone_type_indicators:
+    public: "🌐"
+    private: "🔒"
+
+# Clustering and grouping
+clustering:
+  group_by: "type"  # "type", "vpc", "none"
+  cluster_label_format: "{type} DNS Zones"
+  show_cluster_border: true
+  cluster_style: "dotted"
+
+# Connection settings
+connections:
+  show_record_connections: true
+  show_alias_connections: true
+  connection_label_format: "{record_type}"
+  alias_label_format: "ALIAS → {target}"
+  
+# Filtering rules
+filters:
+  exclude_zone_types: []  # "public", "private"
+  include_only_zone_types: []
+  exclude_private_zones: false  # Legacy setting
+  min_record_count: null
+  max_record_count: null
+  exclude_system_zones: true  # Exclude AWS system zones
+
+# Record type settings
+record_types:
+  show_a_records: true
+  show_aaaa_records: true
+  show_cname_records: true
+  show_mx_records: true
+  show_txt_records: false
+  show_srv_records: false
+  show_ptr_records: false
+  show_ns_records: false
+  show_soa_records: false
+  
+  # Alias record settings
+  show_alias_records: true
+  alias_target_types:
+    - "ELB load balancer"
+    - "CloudFront distribution"
+    - "API Gateway"
+    - "S3 bucket"

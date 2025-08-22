@@ -1,0 +1,71 @@
+# Security Group Default Configuration
+# This file defines the default rendering settings for Security Groups
+
+# Display settings - what information to show
+display:
+  show_group_id: false
+  show_description: true
+  show_vpc_id: false
+  show_rule_count: true
+  show_ingress_rules: false
+  show_egress_rules: false
+  show_owner: false
+
+# Label formatting
+label:
+  # Available variables: {name}, {id}, {description}, {vpc_id}, {ingress_count}, {egress_count}
+  primary_format: "{name}"
+  secondary_format: "{description}"
+  tertiary_format: "{ingress_count} in, {egress_count} out"
+  max_label_length: 50
+  truncate_style: "ellipsis"  # "ellipsis", "wrap", "none"
+
+# Visual settings
+visual:
+  icon_style: "generic"  # "generic"
+  icon_size: "medium"  # "small", "medium", "large"
+  show_status_indicator: false
+  rule_colors:
+    ingress: "green"
+    egress: "blue"
+    both: "purple"
+
+# Clustering and grouping
+clustering:
+  group_by: "vpc"  # "vpc", "none"
+  cluster_label_format: "VPC: {name}"
+  show_cluster_border: true
+  cluster_style: "solid"
+
+# Connection settings
+connections:
+  show_rule_connections: true
+  show_port_labels: true
+  connection_label_format: "{protocol}:{port}"
+  group_similar_rules: true
+  
+# Filtering rules
+filters:
+  exclude_default_groups: false
+  include_only_default_groups: false
+  exclude_rule_types: []  # ingress, egress
+  include_only_rule_types: []
+  min_rule_count: null
+  max_rule_count: null
+  exclude_protocols: []
+  include_only_protocols: []
+  exclude_ports: []
+  include_only_ports: []
+
+# Rule analysis
+rule_analysis:
+  highlight_open_rules: true  # Rules open to 0.0.0.0/0
+  highlight_wide_rules: true  # Rules open to large CIDR blocks
+  wide_cidr_threshold: 16     # /16 or larger considered "wide"
+  common_ports:
+    http: 80
+    https: 443
+    ssh: 22
+    rdp: 3389
+    mysql: 3306
+    postgres: 5432

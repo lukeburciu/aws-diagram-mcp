@@ -1,0 +1,53 @@
+# VPC Default Configuration
+# This file defines the default rendering settings for VPCs
+
+# Display settings - what information to show
+display:
+  show_vpc_id: false
+  show_cidr_block: true
+  show_state: false
+  show_is_default: true
+  show_region: false
+  show_dhcp_options: false
+  show_tenancy: false
+
+# Label formatting
+label:
+  # Available variables: {name}, {id}, {cidr_block}, {state}, {is_default}, {region}
+  primary_format: "{name}"
+  secondary_format: "{cidr_block}"
+  tertiary_format: ""
+  max_label_length: 50
+  truncate_style: "ellipsis"  # "ellipsis", "wrap", "none"
+
+# Visual settings
+visual:
+  icon_style: "generic"  # "generic"
+  icon_size: "medium"  # "small", "medium", "large"
+  show_status_indicator: true  # Show colored dot for VPC state
+  status_colors:
+    available: "green"
+    pending: "yellow"
+
+# Clustering and grouping
+clustering:
+  group_by: "none"  # "region", "none"
+  cluster_label_format: "Region: {name}"
+  show_cluster_border: true
+  cluster_style: "solid"
+
+# Connection settings
+connections:
+  show_peering_connections: true
+  show_internet_gateway: true
+  show_nat_gateway: true
+  connection_label_format: "{type}"
+  
+# Filtering rules
+filters:
+  exclude_states:
+    - "deleted"
+  exclude_default_vpc: false
+  include_only_default_vpc: false
+  exclude_cidrs: []
+  include_only_cidrs: []

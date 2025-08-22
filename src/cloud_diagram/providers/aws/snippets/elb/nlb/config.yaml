@@ -1,0 +1,64 @@
+# Network Load Balancer (NLB) Default Configuration
+# This file defines the default rendering settings for NLB instances
+
+# Display settings - what information to show
+display:
+  show_scheme: true  # internet-facing or internal
+  show_target_groups: true
+  show_listeners: true
+  show_availability_zones: false
+  show_ip_addresses: false
+  show_cross_zone_balancing: false
+  show_deletion_protection: false
+  show_access_logs: false
+
+# Label formatting
+label:
+  # Available variables: {name}, {dns_name}, {scheme}, {type}, {state}, {vpc_id}
+  primary_format: "{name}"
+  secondary_format: "{scheme}"
+  tertiary_format: ""  # Optional third line
+  max_label_length: 50
+  truncate_style: "ellipsis"
+
+# Visual settings
+visual:
+  icon_style: "nlb"  # "nlb", "generic"
+  icon_size: "medium"
+  show_status_indicator: true
+  status_colors:
+    active: "green"
+    provisioning: "yellow"
+    active_impaired: "orange"
+    failed: "red"
+
+# Clustering and grouping
+clustering:
+  group_by: "scheme"  # "scheme", "vpc", "availability_zone", "none"
+  cluster_label_format: "{scheme} Network Load Balancers"
+  show_cluster_border: true
+  cluster_style: "dashed"
+
+# Connection settings
+connections:
+  show_target_connections: true
+  show_listener_details: true
+  connection_label_format: "{port}/{protocol}"
+  health_check_label_format: "HC: {port}"
+  
+# Filtering rules
+filters:
+  exclude_states:
+    - "failed"
+  exclude_schemes: []  # "internet-facing", "internal"
+  include_only_schemes: []
+  exclude_protocols: []  # "TCP", "TLS", "UDP", "TCP_UDP"
+  min_target_count: null
+  max_target_count: null
+
+# Target group settings
+target_groups:
+  show_unhealthy_targets: false
+  show_target_details: true
+  group_targets_by_type: true
+  target_label_format: "{id}:{port}"

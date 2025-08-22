@@ -1,0 +1,80 @@
+# ACM Certificate Default Configuration
+# This file defines the default rendering settings for ACM certificates
+
+# Display settings - what information to show
+display:
+  show_status: true  # ISSUED, PENDING_VALIDATION, etc.
+  show_domain_validation: true
+  show_expiration_date: false
+  show_key_algorithm: false
+  show_key_usage: false
+  show_extended_key_usage: false
+  show_serial_number: false
+  show_subject_alternative_names: true
+  show_validation_method: false  # EMAIL, DNS
+  show_certificate_authority: false
+  show_transparency_logging: false
+
+# Label formatting
+label:
+  # Available variables: {domain}, {arn}, {status}, {type}, {validation_method}, 
+  # {expiration_date}, {serial_number}, {key_algorithm}
+  primary_format: "{domain}"
+  secondary_format: "{status}"
+  tertiary_format: ""  # Optional third line
+  max_label_length: 50
+  truncate_style: "ellipsis"
+
+# Visual settings
+visual:
+  icon_style: "acm"  # "acm", "generic"
+  icon_size: "medium"
+  show_status_indicator: true
+  status_colors:
+    ISSUED: "green"
+    PENDING_VALIDATION: "yellow"
+    INACTIVE: "gray"
+    EXPIRED: "red"
+    VALIDATION_TIMED_OUT: "red"
+    REVOKED: "red"
+    FAILED: "red"
+
+# Clustering and grouping
+clustering:
+  group_by: "validation_method"  # "validation_method", "status", "domain", "none"
+  cluster_label_format: "{method} Validated Certificates"
+  show_cluster_border: true
+  cluster_style: "dotted"
+
+# Connection settings
+connections:
+  show_load_balancer_connections: true
+  show_cloudfront_connections: true
+  show_api_gateway_connections: true
+  connection_label_format: "TLS"
+  
+# Filtering rules
+filters:
+  exclude_statuses:
+    - "EXPIRED"
+    - "REVOKED"
+    - "FAILED"
+  exclude_validation_methods: []  # "EMAIL", "DNS"
+  include_only_validation_methods: []
+  exclude_certificate_types: []  # "AMAZON_ISSUED", "IMPORTED"
+  include_only_certificate_types: []
+  exclude_wildcard_certificates: false
+  include_only_wildcard_certificates: false
+
+# Domain settings
+domains:
+  show_wildcard_indicator: true
+  wildcard_indicator: "*.."
+  group_by_root_domain: false
+  max_san_display: 3  # Maximum SANs to show in label
+
+# Validation settings
+validation:
+  show_validation_records: false
+  show_validation_status_per_domain: false
+  group_by_validation_method: true

@@ -1,0 +1,166 @@
+# AWS Provider Default Configuration
+# This file contains default settings for AWS infrastructure diagrams
+
+diagram:
+  output_format: png
+  layout: hierarchical
+  title: "AWS Infrastructure Diagram"
+
+naming_conventions:
+  vpc_format: "{name} ({cidr})"
+  instance_format: "{name}\\n{type}\\n{ip}"
+  subnet_format: "{tier}: {name}\\n{cidr}"
+  database_format: "{name}\\n{engine} {version}\\n{instance_class}"
+  load_balancer_format: "{name}\\n{type}\\n{scheme}"
+
+resource_filters:
+  # Example filters - can be overridden by user config
+  exclude_tags: []
+  include_only_regions: []
+  exclude_resource_types: []
+  max_resources_per_type: 100
+  
+  # AWS-specific filters
+  include_default_vpcs: false
+  exclude_terminated_instances: true
+
+hierarchy_rules:
+  group_by: 
+    - region
+    - vpc  
+    - subnet_tier
+  
+  subnet_tiers:
+    public: 
+      - "*public*"
+      - "*dmz*" 
+      - "*web*"
+      - "*elb*"
+    private:
+      - "*private*"
+      - "*app*"
+      - "*application*"
+      - "*compute*"
+    restricted:
+      - "*db*"
+      - "*data*"
+      - "*database*"
+      - "*rds*"
+
+visual_rules:
+  icon_size: medium
+  show_connections: true
+  connection_labels: ports
+  color_scheme: aws_official
+  layout_direction: top_to_bottom
+  cluster_padding: 20
+  
+  # AWS-specific visual settings
+  show_availability_zones: true
+  group_by_vpc: true
+  highlight_internet_gateways: true
+
+security_analysis:
+  highlight_open_ports: true
+  show_internet_gateways: true  
+  mark_public_resources: true
+  connection_flows: inter-subnet
+  
+  # AWS-specific security settings
+  highlight_security_groups: true
+  show_nacl_rules: false
+  mark_iam_roles: false
+
+# AWS service-specific settings
+aws:
+  # Global settings that apply to all AWS snippets
+  global:
+    show_resource_ids: false
+    show_tags: false
+    tag_filter:
+      include: []
+      exclude: ["aws:*"]
+  
+  # Snippet-specific configuration overrides
+  snippets:
+    ec2:
+      instance:
+        display:
+          show_instance_state: true
+          show_instance_id: false
+          show_key_pair: false
+        clustering:
+          group_by: "subnet"  # Override default clustering
+        visual:
+          icon_size: "medium"
+        filters:
+          exclude_states:
+            - "terminated"
+            - "shutting-down"
+    
+    rds:
+      db_instance:
+        display:
+          show_engine_version: true
+          show_multi_az: true
+          show_backup_retention: false
+          show_endpoint: false  # Hide endpoints at provider level
+        visual:
+          icon_style: "engine_specific"
+        filters:
+          exclude_engines:
+            - "sqlserver-web"  # Example: exclude specific editions
+    
+    elb:
+      alb:
+        display:
+          show_health_checks: true
+          show_ssl_certificates: true
+          show_target_groups: true
+        clustering:
+          group_by: "scheme"
+        
+      nlb:
+        display:
+          show_listeners: true
+          show_target_groups: true
+        clustering:
+          group_by: "scheme"
+          
+      classic:
+        display:
+          show_health_checks: true
+          show_instances: true
+        clustering:
+          group_by: "scheme"
+    
+    route53:
+      hosted_zone:
+        display:
+          show_zone_type: true
+          show_record_count: true
+          show_record_types: false
+        filters:
+          exclude_private_zones: false  # Include private zones
+          exclude_system_zones: true
+        clustering:
+          group_by: "type"
+    
+    acm:
+      certificate:
+        display:
+          show_status: true
+          show_subject_alternative_names: true
+          show_expiration_date: false  # Don't clutter by default
+        clustering:
+          group_by: "validation_method"
+        filters:
+          exclude_statuses:
+            - "EXPIRED"
+            - "REVOKED"
+            - "FAILED"
+    
+    vpc:
+      show_route_tables: false
+      show_internet_gateways: true
+      show_nat_gateways: true

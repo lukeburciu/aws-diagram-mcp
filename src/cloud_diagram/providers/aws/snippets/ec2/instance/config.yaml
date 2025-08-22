@@ -1,0 +1,94 @@
+# EC2 Instance Default Configuration
+# This file defines the default rendering settings for EC2 instances
+
+# Display settings - what information to show
+display:
+  show_instance_id: false
+  show_instance_type: true
+  show_private_ip: true
+  show_public_ip: false
+  show_key_pair: false
+  show_security_groups: false
+  show_subnet: false
+  show_availability_zone: false
+  show_instance_state: true
+  show_launch_time: false
+  show_platform: false
+  show_monitoring: false
+
+# Label formatting
+label:
+  # Available variables: {name}, {id}, {instance_type}, {private_ip}, {public_ip}, 
+  # {state}, {az}, {platform}, {key_pair}
+  primary_format: "{name}"
+  secondary_format: "{instance_type}"
+  tertiary_format: "{private_ip}"
+  max_label_length: 50
+  truncate_style: "ellipsis"  # "ellipsis", "wrap", "none"
+
+# Visual settings
+visual:
+  icon_style: "generic"  # "generic", "platform_specific"
+  icon_size: "medium"  # "small", "medium", "large"
+  show_status_indicator: true  # Show colored dot for instance state
+  status_colors:
+    running: "green"
+    pending: "yellow"
+    shutting-down: "orange"
+    terminated: "red"
+    stopping: "orange"
+    stopped: "gray"
+
+# Clustering and grouping
+clustering:
+  group_by: "subnet"  # "subnet", "availability_zone", "instance_type", "security_group", "none"
+  cluster_label_format: "{type}: {name}"
+  show_cluster_border: true
+  cluster_style: "solid"
+
+# Connection settings
+connections:
+  show_security_group_connections: true
+  show_load_balancer_connections: true
+  connection_label_format: "{port}/{protocol}"
+  
+# Filtering rules
+filters:
+  exclude_states:
+    - "terminated"
+    - "shutting-down"
+  exclude_instance_types: []
+  include_only_instance_types: []
+  exclude_platforms: []
+  include_only_platforms: []
+  min_cpu_count: null
+  max_cpu_count: null
+  min_memory_gb: null
+  max_memory_gb: null
+
+# Instance type categories for grouping
+instance_type_categories:
+  compute_optimized:
+    - "c4.*"
+    - "c5.*"
+    - "c5n.*"
+    - "c6i.*"
+  memory_optimized:
+    - "r4.*"
+    - "r5.*"
+    - "r6i.*"
+    - "x1.*"
+  storage_optimized:
+    - "i3.*"
+    - "d2.*"
+    - "h1.*"
+  accelerated_computing:
+    - "p3.*"
+    - "p4.*"
+    - "g4.*"
+  general_purpose:
+    - "t2.*"
+    - "t3.*"
+    - "m4.*"
+    - "m5.*"
+    - "m6i.*"
