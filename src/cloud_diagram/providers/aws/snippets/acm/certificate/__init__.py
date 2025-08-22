@@ -438,7 +438,7 @@ def list_resources(aws_client: AWSClient, config: Dict[str, Any]) -> Iterator[Re
                 domain_name=domain_name,
                 subject_alternative_names=certificate.get('SubjectAlternativeNames', []),
                 status=status,
-                type=cert_type,
+                certificate_type=cert_type,
                 key_algorithm=certificate.get('KeyAlgorithm'),
                 serial=certificate.get('Serial'),
                 subject=certificate.get('Subject'),

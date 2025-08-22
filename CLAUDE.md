@@ -39,8 +39,8 @@ cloud-diagram [OPTIONS] COMMAND
 cloud-diagram discover    # Discover cloud resources and output JSON
 cloud-diagram diagram     # Generate infrastructure diagram
 
-# Example: Generate AWS architecture diagram for multiple regions
-uv run python -m cloud_diagram --provider aws --regions us-east-1 us-west-2 --sg-preset clean diagram --output architecture.png
+# Example: Generate AWS architecture diagram
+uv run python -m cloud_diagram --provider aws --region us-east-1 diagram --output architecture --format png
 
 # Example: Use custom configuration file
 uv run python -m cloud_diagram --provider aws --config my-config.yaml diagram
@@ -62,9 +62,17 @@ src/cloud_diagram/
 └── providers/           # Cloud provider modules
     ├── __init__.py      # Provider registry
     └── aws/             # AWS provider implementation
-        ├── discovery.py # AWS resource discovery
+        ├── discovery_v2.py # AWS resource discovery
         ├── diagram.py   # AWS diagram generation
-        └── config.yaml  # AWS default configuration
+        ├── config.yaml  # AWS default configuration
+        └── snippets/    # Resource-specific rendering snippets
+            ├── registry.py     # Snippet management
+            ├── base.py         # Base snippet class
+            ├── ec2/            # EC2 resource snippets
+            ├── rds/            # RDS resource snippets
+            ├── elb/            # Load balancer snippets
+            ├── route53/        # Route53 snippets
+            └── acm/            # Certificate Manager snippets
 ```
 
 ### Core Components
@@ -84,7 +92,12 @@ src/cloud_diagram/
    - Multi-region resource discovery
    - DOT/Graphviz diagram generation with AWS icons
 
-4. **CLI Tool** (`src/cloud_diagram/cli.py`)
+4. **Snippet System** (`src/cloud_diagram/providers/aws/snippets/`)
+   - Modular resource-specific rendering logic
+   - Registry-based snippet management
+   - Extensible architecture for new AWS services
+
+5. **CLI Tool** (`src/cloud_diagram/cli.py`)
    - Provider-agnostic command-line interface
    - Configuration file support
    - Security group configuration presets and filters
@@ -93,11 +106,12 @@ src/cloud_diagram/
 
 - **Provider Isolation**: Each cloud provider is completely independent
 - **Configuration-Driven**: Behavior controlled through YAML configuration files
-- **Multi-Region Support**: All discovery methods accept a list of regions and aggregate results
-- **Hierarchical Organization**: Resources organized as Account > Region > VPC > Subnet
+- **Single-Region Support**: Discovery operates in a single AWS region
+- **Hierarchical Organization**: Resources organized as Region > VPC > Subnet
 - **Security Group Mapping**: Analyzes actual connections based on security group rules
 - **Flexible Output**: Supports multiple formats (DOT, PNG, SVG, PDF)
 - **Enterprise Features**: Naming conventions, resource filters, visual customization
+- **Snippet-Based Rendering**: Modular approach to resource visualization with service-specific logic
 
 ### Configuration System
 
@@ -111,14 +125,12 @@ diagram:
 
 naming_conventions:
   vpc_format: "{name} ({cidr})"
-  instance_format: "{name}\n{type}\n{ip}"
+  instance_format: "{name}\\n{type}\\n{ip}"
 
 resource_filters:
   exclude_tags:
     - Environment: test
-  include_only_regions:
-    - us-east-1
-    - us-west-2
+  max_resources_per_type: 100
 
 hierarchy_rules:
   group_by: [region, vpc, subnet_tier]
@@ -135,11 +147,10 @@ visual_rules:
 ```
 
 #### CLI Configuration Options
-Security group visualization is highly configurable through CLI options:
-- **Connection flows**: `none`, `inter-subnet`, `tier-crossing`, `external-only`
-- **Traffic direction**: `both`, `north-south`, `east-west`
-- **Label detail**: `minimal`, `ports`, `protocols`, `full`
-- **Presets**: `clean`, `network`, `security`, `debug`
+- **Region Selection**: Uses `--region` flag or `$AWS_DEFAULT_REGION` environment variable (defaults to us-east-1)
+- **Diagram Presets**: `clean`, `network`, `security`
+- **Output Formats**: `png`, `svg`, `pdf`, `dot`
+- **Service Filtering**: Specify specific services with `--services ec2,rds`
 
 ## AWS Requirements
 
@@ -171,3 +182,4 @@ Security group visualization is highly configurable through CLI options:
 - Unit tests for individual discovery methods
 - Integration tests for multi-region functionality (`tests/test_multi_region_cli.py`)
 - CLI tests for command-line interface (`tests/test_cli_regions.py`)
+- when running python scripts, files, handling any python based actions - use uv always

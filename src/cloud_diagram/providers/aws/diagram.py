@@ -33,14 +33,14 @@ class DiagramsGenerator:
         rds_instances: List[Dict[str, Any]],
         security_groups: Dict[str, Any],
         route53_zones: List[Dict[str, Any]],
-        regions: List[str] = None,
+        region: str = None,
         output_path: str = "aws_infrastructure",
         sg_options: Optional[Dict[str, Any]] = None,
         lb_options: Optional[Dict[str, Any]] = None
     ) -> str:
         """Generate a complete DOT diagram using Python Diagrams."""
-        if regions is None:
-            regions = ["us-east-1"]
+        if region is None:
+            region = "us-east-1"
             
         self.nodes = {}
         self.connections = []

@@ -38,7 +38,7 @@ class CloudDiagramCLI:
         try:
             self.discovery, self.diagram_class = get_provider(
                 provider, 
-                regions=[region], 
+                region=region, 
                 profile=profile
             )
             if self.args and self.args.verbose:
@@ -295,9 +295,8 @@ class CloudDiagramCLI:
                 rds_instances=resources.get('rds_instances', []),
                 security_groups=resources.get('security_groups', {}),
                 route53_zones=resources.get('route53_zones', []),
-                regions=[self.discovery.aws_client.region] if hasattr(self.discovery, 'aws_client') else ['unknown'],
-                output_path=output,
-                format=format
+                region=self.discovery.aws_client.region if hasattr(self.discovery, 'aws_client') else 'unknown',
+                output_path=output
             )
             
             if result:

@@ -422,7 +422,7 @@ def list_resources(aws_client: AWSClient, config: Dict[str, Any]) -> Iterator[Re
                 canonical_hosted_zone_id=lb.get('CanonicalHostedZoneId'),
                 created_time=lb.get('CreatedTime'),
                 scheme=scheme,
-                type=lb_type,
+                load_balancer_type=lb_type,
                 ip_address_type=lb.get('IpAddressType'),
                 availability_zones=lb.get('AvailabilityZones', []),
                 target_groups=target_groups,
