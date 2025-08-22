@@ -54,8 +54,8 @@ class CloudDiagramCLI:
             print("Error: No provider configured")
             return 1
         
-        if hasattr(self.discovery, 'registry'):
-            available = self.discovery.registry.list_available()
+        if hasattr(self.discovery, 'list_available_snippets'):
+            available = self.discovery.list_available_snippets()
             
             print("Available services:")
             for service, resource_types in available.items():
@@ -73,8 +73,8 @@ class CloudDiagramCLI:
             print("Error: No provider configured")
             return 1
         
-        if hasattr(self.discovery, 'registry'):
-            available = self.discovery.registry.list_available()
+        if hasattr(self.discovery, 'list_available_snippets'):
+            available = self.discovery.list_available_snippets()
             
             if service:
                 if service in available:

@@ -33,7 +33,25 @@ class SnippetRegistry:
             from .ec2.instance import EC2InstanceSnippet
             self.register('ec2', 'instance', EC2InstanceSnippet)
         except ImportError:
-            logger.debug("EC2 snippet not available")
+            logger.debug("EC2 instance snippet not available")
+        
+        try:
+            from .ec2.vpc import VPCSnippet
+            self.register('ec2', 'vpc', VPCSnippet)
+        except ImportError:
+            logger.debug("EC2 VPC snippet not available")
+        
+        try:
+            from .ec2.subnet import SubnetSnippet
+            self.register('ec2', 'subnet', SubnetSnippet)
+        except ImportError:
+            logger.debug("EC2 subnet snippet not available")
+        
+        try:
+            from .ec2.security_group import SecurityGroupSnippet
+            self.register('ec2', 'security_group', SecurityGroupSnippet)
+        except ImportError:
+            logger.debug("EC2 security group snippet not available")
         
         try:
             from .elb.alb import ALBSnippet
